@@ -42,6 +42,11 @@ function WhiteboardRoom() {
   const [remoteCursors, setRemoteCursors] = useState<Map<string, RemoteCursor>>(new Map());
   const lastCursorBroadcast = useRef(0);
 
+  // Pan/zoom (per-user, not shared)
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [scale, setScale] = useState(1);
+
   const wsRef = useRef<WebSocket | null>(null);
   const shapesRef = useRef<Shape[]>([]);
   const userIdRef = useRef<string | null>(null);
@@ -278,6 +283,12 @@ function WhiteboardRoom() {
         shapeOwners={shapeOwners}
         remoteCursors={remoteCursors}
         broadcastCursor={broadcastCursor}
+        panX={panX}
+        panY={panY}
+        scale={scale}
+        onPanXChange={setPanX}
+        onPanYChange={setPanY}
+        onScaleChange={setScale}
       />
       <PropertiesPanel
         selectedShape={selectedShape}

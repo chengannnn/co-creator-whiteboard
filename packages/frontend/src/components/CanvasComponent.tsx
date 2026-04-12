@@ -15,6 +15,12 @@ interface CanvasComponentProps {
   shapeOwners: Map<string, string>;
   remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string; isDrawing: boolean }>;
   broadcastCursor: (x: number, y: number, isDrawing: boolean) => void;
+  panX: number;
+  panY: number;
+  scale: number;
+  onPanXChange: (panX: number) => void;
+  onPanYChange: (panY: number) => void;
+  onScaleChange: (scale: number) => void;
 }
 
 type InteractionMode =
@@ -22,7 +28,8 @@ type InteractionMode =
   | 'drawing'
   | 'selecting'
   | 'moving'
-  | 'resizing';
+  | 'resizing'
+  | 'panning';
 
 type ResizeHandle =
   | 'nw'
@@ -66,6 +73,12 @@ export default function CanvasComponent({
   shapeOwners,
   remoteCursors,
   broadcastCursor,
+  panX,
+  panY,
+  scale,
+  onPanXChange,
+  onPanYChange,
+  onScaleChange,
 }: CanvasComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
@@ -93,6 +106,19 @@ export default function CanvasComponent({
   } | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Pan/zoom interaction refs
+  const spacePressed = useRef(false);
+  const isMiddleButton = useRef(false);
+  const panStart = useRef<Point>({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
+  const panXRef = useRef(0);
+  const panYRef = useRef(0);
+
+  // Keep refs in sync with props
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { panXRef.current = panX; }, [panX]);
+  useEffect(() => { panYRef.current = panY; }, [panY]);
+
   const pushHistory = useCallback(
     (newShapes: Shape[]) => {
       onHistoryChange([...history, shapes]);
@@ -108,6 +134,22 @@ export default function CanvasComponent({
     onShapesChange(previous);
     onSelectedIdChange(null);
   }, [history, onHistoryChange, onShapesChange, onSelectedIdChange]);
+
+  // --- Pan/Zoom helpers ---
+
+  const MIN_ZOOM = 0.1;
+  const MAX_ZOOM = 5;
+  const ZOOM_FACTOR = 0.08;
+
+  const screenToWorld = useCallback(
+    (screenX: number, screenY: number): Point => {
+      return {
+        x: (screenX - panX) / scale,
+        y: (screenY - panY) / scale,
+      };
+    },
+    [panX, panY, scale]
+  );
 
   // --- Helper functions (must be before redrawCanvas) ---
 
@@ -356,6 +398,59 @@ export default function CanvasComponent({
   }, [editingText, shapes]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
+  // --- Space key tracking for pan ---
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        spacePressed.current = true;
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        spacePressed.current = false;
+        if (interactionMode === 'panning') {
+          setInteractionMode('idle');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [interactionMode]);
+
+  // --- Wheel handler for zoom ---
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const currentScale = scaleRef.current;
+      const currentPanX = panXRef.current;
+      const currentPanY = panYRef.current;
+      const delta = -e.deltaY * ZOOM_FACTOR;
+      const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentScale + delta));
+
+      const scaleRatio = newScale / currentScale;
+      const newPanX = mouseX - (mouseX - currentPanX) * scaleRatio;
+      const newPanY = mouseY - (mouseY - currentPanY) * scaleRatio;
+
+      onScaleChange(newScale);
+      onPanXChange(newPanX);
+      onPanYChange(newPanY);
+    },
+    [onScaleChange, onPanXChange, onPanYChange]
+  );
+
   // --- Shape hit detection ---
 
   const hitTestShapes = (point: Point): Shape | null => {
@@ -424,10 +519,9 @@ export default function CanvasComponent({
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    return screenToWorld(screenX, screenY);
   };
 
   const finishEditing = () => {
@@ -542,6 +636,15 @@ export default function CanvasComponent({
     if (editingText) return;
 
     const point = getCanvasPoint(e);
+
+    // Middle-click or space+drag starts panning
+    if (e.button === 1 || (e.button === 0 && spacePressed.current)) {
+      e.preventDefault();
+      panStart.current = { x: e.clientX - panXRef.current, y: e.clientY - panYRef.current };
+      if (e.button === 1) isMiddleButton.current = true;
+      setInteractionMode("panning");
+      return;
+    }
 
     if (activeTool === 'text') {
       // Create a new text shape and start inline editing
@@ -678,6 +781,14 @@ export default function CanvasComponent({
       return;
     }
 
+    if (interactionMode === 'panning') {
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
+      onPanXChange(dx);
+      onPanYChange(dy);
+      return;
+    }
+
     // Update cursor style based on hover
     if (activeTool === 'select' && selectedId) {
       const handle = hitTestHandles(point);
@@ -754,6 +865,12 @@ export default function CanvasComponent({
       return;
     }
 
+    if (interactionMode === 'panning') {
+      isMiddleButton.current = false;
+      setInteractionMode('idle');
+      return;
+    }
+
     if (interactionMode === 'selecting') {
       setInteractionMode('idle');
     }
@@ -764,6 +881,14 @@ export default function CanvasComponent({
 
     const point = getCanvasPoint(e);
     const hitShape = hitTestShapes(point);
+
+    // Double-click on empty canvas resets zoom
+    if (!hitShape) {
+      onScaleChange(1);
+      onPanXChange(0);
+      onPanYChange(0);
+      return;
+    }
 
     if (hitShape?.type === 'text') {
       const textShape = hitShape as TextShape;
@@ -780,29 +905,62 @@ export default function CanvasComponent({
   const cursorStyle =
     interactionMode === 'moving'
       ? 'move'
-      : interactionMode === 'resizing'
-        ? 'crosshair'
-        : activeTool === 'select'
-          ? 'default'
-          : activeTool === 'text'
-            ? 'text'
-            : 'crosshair';
+      : interactionMode === 'panning'
+        ? 'grabbing'
+        : interactionMode === 'resizing'
+          ? 'crosshair'
+          : activeTool === 'select' && spacePressed.current
+            ? 'grab'
+            : activeTool === 'select'
+              ? 'default'
+              : activeTool === 'text'
+                ? 'text'
+                : 'crosshair';
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
+      <div
         style={{
-          display: 'block',
+          position: 'relative',
           width: '100vw',
           height: '100vh',
-          cursor: cursorStyle,
+          overflow: 'hidden',
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onDoubleClick={handleDoubleClick}
-      />
+        onWheel={handleWheel}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: 'block',
+            transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
+            transformOrigin: '0 0',
+            cursor: cursorStyle,
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onDoubleClick={handleDoubleClick}
+        />
+        {/* Zoom level indicator */}
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            padding: '4px 10px',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            color: '#374151',
+            zIndex: 100,
+            userSelect: 'none',
+          }}
+        >
+          {Math.round(scale * 100)}%
+        </div>
+      </div>
       {Array.from(remoteCursors.values()).map((cursor) => {
         const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
         const displayName = colorName ? `${colorName} ${cursor.name}` : cursor.name;
