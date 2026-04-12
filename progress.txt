@@ -230,3 +230,18 @@ Started: Sun Apr 12 16:08:46     2026
   - PropertiesPanel positioned at `top: 62px` (below toolbar at `top: 12px` + toolbar height ~50px)
   - Color picker inputs use `position: absolute; opacity: 0` to hide native input while keeping label clickable
 ---
+
+## [2026-04-12] - v2-redesign-1
+- Fixed canvas jitter during drawing and input
+- Changes:
+  - Added `moveShapesRef` to store intermediate shapes during move/resize operations — avoids React state mutations on every mouseMove
+  - `redrawCanvas` uses `moveShapesRef.current ?? shapes` to render intermediate state without triggering re-renders
+  - Panning handler updates `panXRef`/`panYRef` and redraws using `applyCanvasTransformFromRefs` — no `onPanXChange`/`onPanYChange` during mouseMove
+  - Pan/panY synced to parent state only on mouseUp for consistency with other components
+  - Shapes state only committed on mouseUp via `pushHistory`, triggering WebSocket broadcast once per interaction
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - During drag interactions (move/resize/pan), use refs for intermediate state and direct canvas redraw — only commit to React state on mouseUp
+  - `applyCanvasTransformFromRefs` uses ref values for pan/scale to avoid dependency on React state during panning
+  - `moveShapesRef` is cleared to null on mouseUp, falling back to committed `shapes` state
+---

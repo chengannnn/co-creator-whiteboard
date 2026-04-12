@@ -115,10 +115,14 @@ export default function CanvasComponent({
   const panXRef = useRef(0);
   const panYRef = useRef(0);
 
+  // Intermediate shapes during move/resize — avoids React state mutations on every mouseMove
+  const moveShapesRef = useRef<Shape[] | null>(null);
+
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   useEffect(() => { panXRef.current = panX; }, [panX]);
   useEffect(() => { panYRef.current = panY; }, [panY]);
+  useEffect(() => { if (!moveShapesRef.current) moveShapesRef.current = shapes; }, [shapes]);
 
   const pushHistory = useCallback(
     (newShapes: Shape[]) => {
@@ -152,12 +156,20 @@ export default function CanvasComponent({
     [panX, panY, scale]
   );
 
-  // Apply pan/scale transform to canvas context
+  // Apply pan/scale transform to canvas context (uses React state)
   const applyCanvasTransform = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       ctx.setTransform(scale, 0, 0, scale, panX, panY);
     },
     [panX, panY, scale]
+  );
+
+  // Apply pan/scale transform using ref values (for panning without re-renders)
+  const applyCanvasTransformFromRefs = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      ctx.setTransform(scaleRef.current, 0, 0, scaleRef.current, panXRef.current, panYRef.current);
+    },
+    []
   );
 
   // --- Helper functions (must be before redrawCanvas) ---
@@ -292,6 +304,9 @@ export default function CanvasComponent({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Use intermediate shapes during move/resize, otherwise use committed shapes
+    const activeShapes = moveShapesRef.current ?? shapes;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = theme.canvasBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -300,12 +315,12 @@ export default function CanvasComponent({
     ctx.save();
     applyCanvasTransform(ctx);
 
-    for (const shape of shapes) {
+    for (const shape of activeShapes) {
       drawShape(roughCanvas, shape);
     }
 
     // Draw colored borders on remote shapes (attribution)
-    for (const shape of shapes) {
+    for (const shape of activeShapes) {
       const ownerId = shapeOwners.get(shape.id);
       if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
         const bounds = getShapeBounds(shape);
@@ -321,7 +336,7 @@ export default function CanvasComponent({
 
     // Draw selection bounding boxes
     for (const selId of selectedIds) {
-      const shape = shapes.find((s) => s.id === selId);
+      const shape = activeShapes.find((s) => s.id === selId);
       if (!shape) continue;
       const bbox = getBBox(shape);
       if (!bbox) continue;
@@ -816,7 +831,8 @@ export default function CanvasComponent({
       if (dx === 0 && dy === 0) return;
 
       const selectedIdSet = new Set(selectedIds);
-      const newShapes = shapes.map((s) => {
+      const currentShapes = moveShapesRef.current ?? shapes;
+      const newShapes = currentShapes.map((s) => {
         if (!selectedIdSet.has(s.id)) return s;
         if (s.type === 'freehand') {
           return {
@@ -836,13 +852,15 @@ export default function CanvasComponent({
         return { ...s, x: s.x + dx, y: s.y + dy };
       });
 
-      onShapesChange(newShapes);
+      moveShapesRef.current = newShapes;
+      redrawCanvas();
       return;
     }
 
     if (interactionMode === 'resizing' && selectedIds.length > 0 && activeHandle) {
       const primaryId = selectedIds[selectedIds.length - 1];
-      const shape = shapes.find((s) => s.id === primaryId);
+      const currentShapes = moveShapesRef.current ?? shapes;
+      const shape = currentShapes.find((s) => s.id === primaryId);
       if (!shape) return;
 
       const orig = resizeStartBounds.current;
@@ -850,16 +868,83 @@ export default function CanvasComponent({
       const dy = point.y - (orig.y + (activeHandle.includes('s') ? orig.height : 0));
 
       const resized = applyResize(shape, activeHandle, dx, dy);
-      const newShapes = shapes.map((s) => (s.id === primaryId ? resized : s));
-      onShapesChange(newShapes);
+      const newShapes = currentShapes.map((s) => (s.id === primaryId ? resized : s));
+      moveShapesRef.current = newShapes;
+      redrawCanvas();
       return;
     }
 
     if (interactionMode === 'panning') {
       const dx = e.clientX - panStart.current.x;
       const dy = e.clientY - panStart.current.y;
-      onPanXChange(dx);
-      onPanYChange(dy);
+      // Update refs and redraw using ref-based transform — avoid React state re-renders during panning
+      panXRef.current = dx;
+      panYRef.current = dy;
+      // Redraw using ref-based transform for smooth panning
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const roughCanvas = roughCanvasRef.current;
+        if (!roughCanvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const activeShapes = moveShapesRef.current ?? shapes;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = theme.canvasBg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        applyCanvasTransformFromRefs(ctx);
+
+        for (const shape of activeShapes) {
+          drawShape(roughCanvas, shape);
+        }
+
+        // Draw colored borders on remote shapes
+        for (const shape of activeShapes) {
+          const ownerId = shapeOwners.get(shape.id);
+          if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
+            const bounds = getShapeBounds(shape);
+            const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
+            ctx.save();
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 2 / scaleRef.current;
+            ctx.setLineDash([]);
+            ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+            ctx.restore();
+          }
+        }
+
+        // Draw selection bounding boxes
+        for (const selId of selectedIds) {
+          const shape = activeShapes.find((s) => s.id === selId);
+          if (!shape) continue;
+          const bbox = getBBox(shape);
+          if (!bbox) continue;
+
+          const ownerId = shapeOwners.get(shape.id);
+          const isRemote = ownerId && ownerId !== userId;
+          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          ctx.lineWidth = 1.5 / scaleRef.current;
+          ctx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
+          ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+          ctx.setLineDash([]);
+
+          const handles = getHandlePositions(bbox);
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          ctx.lineWidth = 1.5 / scaleRef.current;
+
+          for (const pos of Object.values(handles)) {
+            const hs = HANDLE_SIZE / scaleRef.current;
+            ctx.fillRect(pos.x, pos.y, hs, hs);
+            ctx.strokeRect(pos.x, pos.y, hs, hs);
+          }
+        }
+
+        ctx.restore();
+      }
       return;
     }
 
@@ -947,14 +1032,19 @@ export default function CanvasComponent({
     }
 
     if (interactionMode === 'moving' || interactionMode === 'resizing') {
-      // Commit the move/resize to history
-      pushHistory([...shapes]);
+      // Commit intermediate shapes to React state (triggers WebSocket broadcast once)
+      const finalShapes = moveShapesRef.current ?? shapes;
+      pushHistory(finalShapes);
+      moveShapesRef.current = null;
       setInteractionMode('idle');
       setActiveHandle(null);
       return;
     }
 
     if (interactionMode === 'panning') {
+      // Sync pan/panY to parent state after panning completes
+      onPanXChange(panXRef.current);
+      onPanYChange(panYRef.current);
       isMiddleButton.current = false;
       setInteractionMode('idle');
       return;
