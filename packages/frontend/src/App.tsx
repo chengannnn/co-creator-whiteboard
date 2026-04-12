@@ -51,6 +51,9 @@ function WhiteboardRoom() {
   // Eraser radius (default 20px)
   const [eraserRadius, setEraserRadius] = useState(20);
 
+  // Canvas lock (no drawing/select/move, pan/zoom still work)
+  const [locked, setLocked] = useState(false);
+
   const wsRef = useRef<WebSocket | null>(null);
   const shapesRef = useRef<Shape[]>([]);
   const userIdRef = useRef<string | null>(null);
@@ -462,6 +465,8 @@ function WhiteboardRoom() {
         onStyleChange={handleStyleChange}
         eraserRadius={eraserRadius}
         onEraserRadiusChange={setEraserRadius}
+        locked={locked}
+        onLockChange={setLocked}
       />
       <CanvasComponent
         activeTool={activeTool}
@@ -483,6 +488,7 @@ function WhiteboardRoom() {
         onPanYChange={setPanY}
         onScaleChange={setScale}
         eraserRadius={eraserRadius}
+        locked={locked}
       />
       <BottomPanel
         roomId={roomId ?? 'unknown'}

@@ -23,6 +23,7 @@ interface CanvasComponentProps {
   onPanYChange: (panY: number) => void;
   onScaleChange: (scale: number) => void;
   eraserRadius: number;
+  locked: boolean;
 }
 
 type InteractionMode =
@@ -90,6 +91,7 @@ export default function CanvasComponent({
   onPanYChange,
   onScaleChange,
   eraserRadius,
+  locked,
 }: CanvasComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
@@ -488,12 +490,14 @@ export default function CanvasComponent({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+        if (locked) return;
         e.preventDefault();
         undo();
         return;
       }
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        if (locked) return;
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
         e.preventDefault();
@@ -509,7 +513,7 @@ export default function CanvasComponent({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, shapes, undo, pushHistory, onSelectedIdsChange]);
+  }, [selectedIds, shapes, undo, pushHistory, onSelectedIdsChange, locked]);
 
   // Track space key state for pan modifier
   useEffect(() => {
@@ -873,6 +877,17 @@ export default function CanvasComponent({
   const handleMouseDown = (e: React.MouseEvent) => {
     // If currently editing text, don't process other mouse events
     if (editingText) return;
+
+    // When locked, only panning is allowed — block all other interactions
+    if (locked) {
+      if (e.button === 1 || (e.button === 0 && spacePressed.current)) {
+        e.preventDefault();
+        panStart.current = { x: e.clientX - panXRef.current, y: e.clientY - panYRef.current };
+        if (e.button === 1) isMiddleButton.current = true;
+        setInteractionMode('panning');
+      }
+      return;
+    }
 
     // Eraser tool: start pixel erase mode (no shape deletion)
     if (activeTool === 'eraser') {
@@ -1323,6 +1338,7 @@ export default function CanvasComponent({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (editingText) return;
+    if (locked) return;
 
     const point = getCanvasPoint(e);
     const hitShape = hitTestShapes(point);
@@ -1355,8 +1371,9 @@ export default function CanvasComponent({
     }
   };
 
-  const cursorStyle =
-    interactionMode === 'moving'
+  const cursorStyle = locked
+    ? 'not-allowed'
+    : interactionMode === 'moving'
       ? 'move'
       : interactionMode === 'panning'
         ? 'grabbing'

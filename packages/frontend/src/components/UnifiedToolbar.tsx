@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolType, FillStyle, StrokeWidth, StrokeStyle } from '../types/shapes';
 import { theme } from '../theme';
 
@@ -54,6 +55,8 @@ interface UnifiedToolbarProps {
   onStyleChange: (style: { strokeWidth?: StrokeWidth; strokeStyle?: StrokeStyle }) => void;
   eraserRadius: number;
   onEraserRadiusChange: (radius: number) => void;
+  locked: boolean;
+  onLockChange: (locked: boolean) => void;
 }
 
 export default function UnifiedToolbar({
@@ -68,7 +71,51 @@ export default function UnifiedToolbar({
   onStyleChange,
   eraserRadius,
   onEraserRadiusChange,
+  locked,
+  onLockChange,
 }: UnifiedToolbarProps) {
+  const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef<{ x: number; y: number; toolbarX: number; toolbarY: number } | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      toolbarX: toolbarPos.x,
+      toolbarY: toolbarPos.y,
+    };
+  }, [toolbarPos]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStart.current) return;
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      setToolbarPos({
+        x: dragStart.current.toolbarX + dx,
+        y: dragStart.current.toolbarY + dy,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      dragStart.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   const handleImageClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -91,8 +138,8 @@ export default function UnifiedToolbar({
     <div
       style={{
         position: 'fixed',
-        top: '12px',
-        left: '50%',
+        top: `${12 + toolbarPos.y}px`,
+        left: `calc(50% + ${toolbarPos.x}px)`,
         transform: 'translateX(-50%)',
         display: 'flex',
         flexDirection: 'column',
@@ -103,12 +150,78 @@ export default function UnifiedToolbar({
         boxShadow: `0 2px 16px ${theme.panelShadow}`,
         zIndex: 10,
         backdropFilter: 'blur(8px)',
-        transition: 'all 0.2s ease',
+        transition: isDragging ? 'none' : 'all 0.2s ease',
       }}
       onMouseDown={(e) => e.stopPropagation()}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { if (!isDragging) setIsHovered(false); }}
     >
       {/* Row 1: Tools */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Drag handle */}
+        <div
+          onMouseDown={handleDragStart}
+          style={{
+            width: '32px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            fontSize: '14px',
+            color: isDragging || isHovered ? theme.textPrimary : theme.textMuted,
+            transition: 'color 0.15s ease',
+            borderRadius: '6px',
+            flexShrink: 0,
+          }}
+          title="Drag to move toolbar"
+        >
+          ⠿
+        </div>
+
+        {/* Lock toggle */}
+        <button
+          title={locked ? 'Unlock canvas' : 'Lock canvas'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onLockChange(!locked);
+          }}
+          style={{
+            width: '32px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: locked ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = locked ? theme.btnActiveBg : theme.btnDefaultBg;
+          }}
+        >
+          {locked ? '🔒' : '🔓'}
+        </button>
+
+        {/* Divider after lock/drag controls */}
+        <div
+          style={{
+            width: '1px',
+            height: '24px',
+            backgroundColor: theme.divider,
+            margin: '0 2px',
+            flexShrink: 0,
+          }}
+        />
+
         {TOOLS.map((tool) => (
           <button
             key={tool.id}

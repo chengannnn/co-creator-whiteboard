@@ -388,3 +388,22 @@ Started: Sun Apr 12 16:08:46     2026
   - Width and style sections use smaller font sizes (9px labels) and tighter gaps to fit within the toolbar footprint
 
 ---
+
+## [2026-04-12] - v2-redesign-10
+- Implemented draggable and lockable toolbar
+- Changes:
+  - UnifiedToolbar: added drag handle (⠿) as first button, click and drag to reposition toolbar
+  - UnifiedToolbar: added lock toggle button (🔓/🔒) as second button
+  - UnifiedToolbar: toolbar position tracked via `toolbarPos` state (x/y offsets from center)
+  - UnifiedToolbar: drag handle visible on hover or during drag, grab/grabbing cursor
+  - App.tsx: added `locked` state, passed to UnifiedToolbar and CanvasComponent
+  - CanvasComponent: locked state blocks handleMouseDown for all tools except panning (middle-click/space+drag)
+  - CanvasComponent: locked state blocks handleDoubleClick text editing
+  - CanvasComponent: locked state blocks Delete/Backspace shape deletion and Ctrl+Z undo
+  - CanvasComponent: cursor shows 'not-allowed' when locked
+  - Pan and zoom still work when canvas is locked
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Toolbar drag uses `calc(50% + ${toolbarPos.x}px)` for horizontal centering + offset pattern
+  - Lock is a simple boolean gate in handleMouseDown that only allows panning mode to be set
+  - Keyboard handlers (Delete, Ctrl+Z) also need lock checks since they bypass mouse handlers
