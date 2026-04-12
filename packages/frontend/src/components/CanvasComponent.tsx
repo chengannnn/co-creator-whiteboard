@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape } from '../types/shapes';
+import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape } from '../types/shapes';
 import { theme } from '../theme';
 
 interface CanvasComponentProps {
@@ -260,6 +260,20 @@ export default function CanvasComponent({
         shape.y + shape.height / 2,
         Math.abs(shape.width),
         Math.abs(shape.height),
+        opts,
+      );
+    } else if (shape.type === 'rhombus') {
+      const cx = shape.x + shape.width / 2;
+      const cy = shape.y + shape.height / 2;
+      const hw = Math.abs(shape.width) / 2;
+      const hh = Math.abs(shape.height) / 2;
+      rc.polygon(
+        [
+          [cx, cy - hh],
+          [cx + hw, cy],
+          [cx, cy + hh],
+          [cx - hw, cy],
+        ],
         opts,
       );
     } else if (shape.type === 'freehand') {
@@ -883,6 +897,23 @@ export default function CanvasComponent({
             stroke: defaultStyle.strokeColor,
             strokeWidth: defaultStyle.strokeWidth,
           });
+        } else if (activeTool === 'rhombus') {
+          const cx = x + width / 2;
+          const cy = y + height / 2;
+          const hw = width / 2;
+          const hh = height / 2;
+          rc.polygon(
+            [
+              [cx, cy - hh],
+              [cx + hw, cy],
+              [cx, cy + hh],
+              [cx - hw, cy],
+            ],
+            {
+              stroke: defaultStyle.strokeColor,
+              strokeWidth: defaultStyle.strokeWidth,
+            },
+          );
         } else if (activeTool === 'line') {
           rc.linearPath(
             [[start.x, start.y], [point.x, point.y]],
@@ -1075,6 +1106,14 @@ export default function CanvasComponent({
         const height = Math.abs(point.y - start.y);
         if (width > 3 && height > 3) {
           newShape = { id: generateId(), type: 'ellipse', x, y, width, height, style: { ...defaultStyle } };
+        }
+      } else if (activeTool === 'rhombus') {
+        const x = Math.min(start.x, point.x);
+        const y = Math.min(start.y, point.y);
+        const width = Math.abs(point.x - start.x);
+        const height = Math.abs(point.y - start.y);
+        if (width > 3 && height > 3) {
+          newShape = { id: generateId(), type: 'rhombus', x, y, width, height, style: { ...defaultStyle } } as RhombusShape;
         }
       } else if (activeTool === 'freehand') {
         if (currentPoints.current.length > 2) {

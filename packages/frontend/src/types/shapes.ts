@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'freehand' | 'eraser';
+export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'rhombus' | 'line' | 'freehand' | 'eraser';
 
 export interface Point {
   x: number;
@@ -71,6 +71,17 @@ export interface TextShape {
   ownerId?: string;
 }
 
+export interface RhombusShape {
+  id: string;
+  type: 'rhombus';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  style: ShapeStyle;
+  ownerId?: string;
+}
+
 export const DEFAULT_STYLE: ShapeStyle = {
   strokeColor: '#000000',
   strokeWidth: 2,
@@ -79,4 +90,4 @@ export const DEFAULT_STYLE: ShapeStyle = {
   fillColor: '#000000',
 };
 
-export type Shape = RectangleShape | EllipseShape | FreehandShape | LineShape | TextShape;
+export type Shape = RectangleShape | EllipseShape | FreehandShape | LineShape | TextShape | RhombusShape;
