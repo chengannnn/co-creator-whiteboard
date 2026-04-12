@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape } from '../types/shapes';
+import { theme } from '../theme';
 
 interface CanvasComponentProps {
   activeTool: ToolType;
@@ -278,7 +279,7 @@ export default function CanvasComponent({
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = theme.canvasBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Apply pan/scale transform for all drawing
@@ -1009,12 +1010,12 @@ export default function CanvasComponent({
             left: editingText.x * scale + panX,
             top: editingText.y * scale + panY,
             minWidth: '100px',
-            border: '2px solid #3b82f6',
+            border: `2px solid ${theme.textEditorBorder}`,
             outline: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backgroundColor: theme.textEditorBg,
             fontFamily: 'sans-serif',
             fontSize: `${editingText.fontSize}px`,
-            color: defaultStyle.strokeColor,
+            color: theme.textPrimary,
             padding: '2px 4px',
             resize: 'none',
             overflow: 'hidden',

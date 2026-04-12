@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ToolType } from '../types/shapes';
+import { theme } from '../theme';
 
 const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] = [
   { id: 'select', label: 'Select', icon: '◇', shortcut: 'V' },
@@ -28,9 +29,9 @@ export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
         alignItems: 'center',
         gap: '4px',
         padding: minimized ? '6px 10px' : '8px 12px',
-        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        backgroundColor: theme.panelBg,
         borderRadius: '10px',
-        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+        boxShadow: `0 2px 12px ${theme.panelShadow}`,
         zIndex: 10,
         backdropFilter: 'blur(8px)',
         transition: 'all 0.2s ease',
@@ -47,12 +48,12 @@ export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid #d1d5db',
+          border: `1px solid ${theme.btnBorder}`,
           borderRadius: '6px',
-          backgroundColor: '#ffffff',
+          backgroundColor: theme.btnHoverBg,
           cursor: 'pointer',
           fontSize: '14px',
-          color: '#6b7280',
+          color: theme.textMuted,
           flexShrink: 0,
         }}
       >
@@ -75,22 +76,22 @@ export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: activeTool === tool.id ? '2px solid #3b82f6' : '1px solid transparent',
+                border: activeTool === tool.id ? `2px solid ${theme.btnActiveBorder}` : '1px solid transparent',
                 borderRadius: '6px',
-                backgroundColor: activeTool === tool.id ? '#eff6ff' : 'transparent',
+                backgroundColor: activeTool === tool.id ? theme.btnActiveBg : theme.btnDefaultBg,
                 cursor: 'pointer',
                 fontSize: '16px',
-                color: '#374151',
+                color: theme.textPrimary,
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
                 if (activeTool !== tool.id) {
-                  (e.target as HTMLElement).style.backgroundColor = '#f3f4f6';
+                  (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
                 }
               }}
               onMouseLeave={(e) => {
                 if (activeTool !== tool.id) {
-                  (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                  (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
                 }
               }}
             >

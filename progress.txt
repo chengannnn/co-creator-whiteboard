@@ -162,3 +162,17 @@ Started: Sun Apr 12 16:08:46     2026
   - `setDefaultStyle` and `handleStyleChange` commented out in App.tsx (will be re-enabled for v2-story-5)
   - Canvas component canvas spans 100vw/100vh — floating UI elements use position:fixed on top
 ---
+
+## [2026-04-12] - v2-story-2
+- Implemented yellow color theme throughout the application
+- Files changed:
+  - packages/frontend/src/theme.ts: new theme constants file with yellow color palette (canvasBg: #FFF8E7, panelBg: rgba(255,253,245,0.92), btnActiveBg: #FFF3C4, textPrimary: #333, etc.)
+  - packages/frontend/src/components/Toolbar.tsx: applied yellow theme to toolbar background, buttons, active/hover states
+  - packages/frontend/src/components/BottomPanel.tsx: applied yellow theme to panel background, buttons, dividers, text colors
+  - packages/frontend/src/components/CanvasComponent.tsx: canvas background changed to light yellow, text editor overlay uses yellow-themed border and background
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Project uses inline styles, not TailwindCSS — theme colors are managed via a centralized `theme.ts` module
+  - Default stroke color remains black (#000000) which provides good contrast on the yellow background
+  - Remote cursor colors (from server-assigned hex colors) remain visible on the yellow canvas
+---

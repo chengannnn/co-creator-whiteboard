@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { theme } from '../theme';
 
 interface BottomPanelProps {
   roomId: string;
@@ -34,7 +35,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale }: Bott
   };
 
   const statusColor =
-    wsStatus === 'connected' ? '#22c55e' : wsStatus === 'reconnecting' ? '#eab308' : '#ef4444';
+    wsStatus === 'connected' ? theme.statusConnected : wsStatus === 'reconnecting' ? theme.statusReconnecting : theme.statusDisconnected;
 
   return (
     <>
@@ -46,13 +47,13 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale }: Bott
             top: '12px',
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: wsStatus === 'reconnecting' ? '#fef3c7' : '#fecaca',
+            backgroundColor: wsStatus === 'reconnecting' ? theme.copiedBg : '#fecaca',
             borderRadius: '8px',
             padding: '6px 14px',
             zIndex: 20,
             fontSize: '13px',
             fontWeight: 500,
-            color: wsStatus === 'reconnecting' ? '#92400e' : '#991b1b',
+            color: wsStatus === 'reconnecting' ? theme.copiedText : '#991b1b',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
           }}
         >
@@ -70,29 +71,29 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale }: Bott
           alignItems: 'center',
           gap: '12px',
           padding: '6px 14px',
-          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          backgroundColor: theme.panelBg,
           borderRadius: '8px',
-          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+          boxShadow: `0 2px 12px ${theme.panelShadow}`,
           zIndex: 10,
           backdropFilter: 'blur(8px)',
           fontSize: '12px',
-          color: '#6b7280',
+          color: theme.textSecondary,
           userSelect: 'none',
         }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Room ID */}
-        <span style={{ fontWeight: 500, color: '#374151' }}>{roomId}</span>
+        <span style={{ fontWeight: 500, color: theme.textPrimary }}>{roomId}</span>
 
         {/* Share button */}
         <button
           onClick={handleShare}
           style={{
             padding: '2px 8px',
-            border: '1px solid #d1d5db',
+            border: `1px solid ${theme.btnBorder}`,
             borderRadius: '4px',
-            backgroundColor: copied ? '#dcfce7' : '#ffffff',
-            color: copied ? '#16a34a' : '#374151',
+            backgroundColor: copied ? theme.copiedBg : theme.btnHoverBg,
+            color: copied ? theme.copiedText : theme.textPrimary,
             cursor: 'pointer',
             fontSize: '11px',
             transition: 'all 0.15s ease',
@@ -102,7 +103,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale }: Bott
         </button>
 
         {/* Divider */}
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#e5e7eb' }} />
+        <div style={{ width: '1px', height: '16px', backgroundColor: theme.divider }} />
 
         {/* User count */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -118,10 +119,10 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale }: Bott
         </div>
 
         {/* Divider */}
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#e5e7eb' }} />
+        <div style={{ width: '1px', height: '16px', backgroundColor: theme.divider }} />
 
         {/* Zoom level */}
-        <span style={{ fontFamily: 'monospace', color: '#374151' }}>
+        <span style={{ fontFamily: 'monospace', color: theme.textPrimary }}>
           {Math.round(scale * 100)}%
         </span>
       </div>

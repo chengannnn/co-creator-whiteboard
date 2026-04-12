@@ -25,7 +25,7 @@
       "title": "Yellow Color Theme",
       "description": "Apply a warm light yellow color theme throughout the application. Canvas background changes from white to light yellow. Toolbar, buttons, and all UI elements follow the same yellow palette. Text colors adjusted for contrast.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Canvas background changed to light yellow (#FFFEF0 or #FFF8E7)",
         "Toolbar background: very light yellow (#FFFDF5) with 92% opacity",
