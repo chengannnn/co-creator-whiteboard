@@ -83,3 +83,20 @@
   - Text editing overlay uses position:fixed with canvas coordinates; need to guard handleMouseDown when editingText is active to prevent shape creation underneath the overlay
   - Empty text shapes are removed on cancel or blur with empty content
 ---
+
+## [2026-04-12] - story-6
+- Implemented room-based collaboration with WebSocket
+- Features: room join via WebSocket, share button copies room URL, user count display, automatic room cleanup after 5 minutes of inactivity
+- Files changed:
+  - packages/backend/src/index.ts: added room management (Map<roomId, Set<WebSocket>>), join_room message handling, user count broadcasting, room cleanup timers
+  - packages/backend/eslint.config.js: added typescript-eslint for TypeScript parsing
+  - packages/backend/package.json: added @typescript-eslint/parser and typescript-eslint dev dependencies
+  - packages/frontend/src/App.tsx: added WebSocket connection, roomId from useParams, user count state, wsStatus state
+  - packages/frontend/src/components/RoomHeader.tsx: new component with room ID display, share button (clipboard API with fallback), user count, connection status indicator
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Backend ESLint flat config needs `typescript-eslint` plugin to parse TypeScript syntax like generic type parameters
+  - WebSocket connections are per-client; roomId is tracked on the ws object via closure
+  - Room cleanup uses setTimeout that gets cancelled when a new user joins; empty rooms trigger the timer
+  - Vite proxies `/ws` to the backend automatically during dev, so frontend connects to same origin
+---

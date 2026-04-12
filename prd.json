@@ -90,7 +90,7 @@
       "title": "Room-Based Collaboration",
       "description": "Implement room creation and joining via unique URL. Display room ID, share button, and user count.",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Visiting / generates unique room ID and redirects to /room/:roomId",
         "Visiting /room/:roomId joins that room",
