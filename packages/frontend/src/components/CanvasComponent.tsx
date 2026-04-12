@@ -114,6 +114,7 @@ export default function CanvasComponent({
   const scaleRef = useRef(1);
   const panXRef = useRef(0);
   const panYRef = useRef(0);
+  const zoomCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Intermediate shapes during move/resize — avoids React state mutations on every mouseMove
   const moveShapesRef = useRef<Shape[] | null>(null);
@@ -465,7 +466,13 @@ export default function CanvasComponent({
   }, [editingText, shapes]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // --- Wheel handler for zoom (native listener for passive: false) ---
+  // --- Wheel handler for zoom (uses refs to avoid re-renders during zoom) ---
+
+  const commitZoomToState = useCallback(() => {
+    onScaleChange(scaleRef.current);
+    onPanXChange(panXRef.current);
+    onPanYChange(panYRef.current);
+  }, [onScaleChange, onPanXChange, onPanYChange]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -487,14 +494,88 @@ export default function CanvasComponent({
       const newPanX = mouseX - (mouseX - currentPanX) * scaleRatio;
       const newPanY = mouseY - (mouseY - currentPanY) * scaleRatio;
 
-      onScaleChange(newScale);
-      onPanXChange(newPanX);
-      onPanYChange(newPanY);
+      // Update refs immediately for jitter-free rendering
+      scaleRef.current = newScale;
+      panXRef.current = newPanX;
+      panYRef.current = newPanY;
+
+      // Redraw immediately with ref-based transform
+      const roughCanvas = roughCanvasRef.current;
+      if (!roughCanvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const activeShapes = moveShapesRef.current ?? shapes;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = theme.canvasBg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      applyCanvasTransformFromRefs(ctx);
+
+      for (const shape of activeShapes) {
+        drawShape(roughCanvas, shape);
+      }
+
+      // Draw colored borders on remote shapes
+      for (const shape of activeShapes) {
+        const ownerId = shapeOwners.get(shape.id);
+        if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
+          const bounds = getShapeBounds(shape);
+          const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
+          ctx.save();
+          ctx.strokeStyle = borderColor;
+          ctx.lineWidth = 2 / newScale;
+          ctx.setLineDash([]);
+          ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+          ctx.restore();
+        }
+      }
+
+      // Draw selection bounding boxes
+      for (const selId of selectedIds) {
+        const shape = activeShapes.find((s) => s.id === selId);
+        if (!shape) continue;
+        const bbox = getBBox(shape);
+        if (!bbox) continue;
+
+        const ownerId = shapeOwners.get(shape.id);
+        const isRemote = ownerId && ownerId !== userId;
+        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+        ctx.lineWidth = 1.5 / newScale;
+        ctx.setLineDash([5 / newScale, 3 / newScale]);
+        ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+        ctx.setLineDash([]);
+
+        const handles = getHandlePositions(bbox);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+        ctx.lineWidth = 1.5 / newScale;
+
+        for (const pos of Object.values(handles)) {
+          const hs = HANDLE_SIZE / newScale;
+          ctx.fillRect(pos.x, pos.y, hs, hs);
+          ctx.strokeRect(pos.x, pos.y, hs, hs);
+        }
+      }
+
+      ctx.restore();
+
+      // Update remote cursors position (they use scale/pan from props)
+      // Debounce state sync — commit after zoom pauses
+      if (zoomCommitTimer.current) clearTimeout(zoomCommitTimer.current);
+      zoomCommitTimer.current = setTimeout(() => {
+        commitZoomToState();
+      }, 150);
     };
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [onScaleChange, onPanXChange, onPanYChange]);
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+      if (zoomCommitTimer.current) clearTimeout(zoomCommitTimer.current);
+    };
+  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, applyCanvasTransformFromRefs, commitZoomToState]);
 
   // --- Shape hit detection ---
 
