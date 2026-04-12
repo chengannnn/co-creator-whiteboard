@@ -259,3 +259,18 @@ Started: Sun Apr 12 16:08:46     2026
   - `commitZoomToState` is a `useCallback` that depends on `onScaleChange`/`onPanXChange`/`onPanYChange` — these are stable props from App.tsx
   - The wheel handler's useEffect depends on `shapes`, `selectedIds`, `getBBox`, `getHandlePositions`, `userId`, `shapeOwners`, `applyCanvasTransformFromRefs`, `commitZoomToState` to properly redraw all canvas elements during zoom
 ---
+
+## [2026-04-12] - v2-redesign-3
+- Implemented rhombus/diamond shape tool
+- Features: rhombus button in toolbar (icon: ◇, shortcut: D), click-and-drag to draw diamond shapes, supports select/move/resize, solid and outline fill modes work via rc.polygon
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added RhombusShape interface (x/y/width/height), added 'rhombus' to ToolType and Shape union
+  - packages/frontend/src/components/Toolbar.tsx: added rhombus tool button with shortcut D
+  - packages/frontend/src/components/CanvasComponent.tsx: added rhombus drawing via rc.polygon connecting 4 vertices (top, right, bottom, left), rhombus preview during drag, rhombus shape creation on mouseUp
+  - packages/frontend/src/App.tsx: added 'd' keyboard shortcut for rhombus tool
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Rhombus uses bounding box (x/y/width/height) like rectangle/ellipse — existing hit detection, move, and resize logic work automatically without modification
+  - rc.polygon takes an array of [x, y] coordinate pairs: 4 vertices for rhombus (top center, right center, bottom center, left center)
+  - Preview drawing during drag uses the same rc.polygon call with identical vertex calculations
+---
