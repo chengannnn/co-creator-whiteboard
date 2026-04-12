@@ -87,7 +87,7 @@
       "title": "Properties Panel Integration",
       "description": "When a shape is selected, show styling controls contextually below the toolbar (second floating row). Controls include: stroke color (8 presets + custom), fill color (8 presets + custom + none), stroke width (3 options), stroke style (solid/dashed), fill style (none/solid/hatch). When no shape selected, controls set defaults for new shapes.",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Selecting a shape expands toolbar or shows second floating panel below it",
         "Stroke color: 8 preset color swatches + custom color picker (black, red, blue, green, purple, orange, brown, gray)",

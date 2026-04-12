@@ -214,3 +214,19 @@ Started: Sun Apr 12 16:08:46     2026
   - Double-click zoom reset was removed; zoom reset is no longer available via double-click (was never an acceptance criteria in v2)
   - The text editing overlay (textarea with position:fixed) works the same way regardless of how editing is initiated
 ---
+
+## [2026-04-12] - v2-story-5
+- Implemented properties panel integration below toolbar
+- Features: floating panel below toolbar with stroke color (8 presets + custom), fill color (8 presets + none + custom), stroke width (3 visual options), stroke style (solid/dashed), fill style (none/solid/hatch)
+- When no shape selected, controls set defaults for new shapes
+- When shape selected, modifying properties immediately updates that shape
+- Files changed:
+  - packages/frontend/src/components/PropertiesPanel.tsx: rewritten as top-centered floating panel below toolbar with yellow theme, horizontal layout with labeled sections and visual icon representations
+  - packages/frontend/src/App.tsx: imported PropertiesPanel, uncommented handleStyleChange, added panelStyle computed prop that shows selected shape style or default style
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - PropertiesPanel uses `defaultStyle` state in App.tsx for new shape defaults; CanvasComponent receives `defaultStyle` prop directly
+  - `panelStyle` computed inline in render picks selected shape's style when any shape is selected, falls back to `defaultStyle`
+  - PropertiesPanel positioned at `top: 62px` (below toolbar at `top: 12px` + toolbar height ~50px)
+  - Color picker inputs use `position: absolute; opacity: 0` to hide native input while keeping label clickable
+---
