@@ -85,6 +85,13 @@ function broadcastToRoom(roomId: string, message: object, excludeWs?: WebSocket)
   }
 }
 
+function broadcastCursorLeave(roomId: string, ws: WebSocket) {
+  const identity = userIdentities.get(ws);
+  if (!identity) return;
+  const userId = `${identity.color}-${identity.name}`;
+  broadcastToRoom(roomId, { type: 'cursor_leave', userId }, ws);
+}
+
 function sendFullState(ws: WebSocket, roomId: string) {
   const shapes = roomShapes.get(roomId) ?? [];
   ws.send(JSON.stringify({ type: 'sync_state', shapes }));
@@ -225,6 +232,20 @@ wss.on('connection', (ws, req) => {
       if (currentRoom && msg.type === 'request_sync') {
         sendFullState(ws, currentRoom);
       }
+
+      // Relay cursor position to room (for live presence)
+      if (currentRoom && msg.type === 'cursor_position') {
+        const identity = userIdentities.get(ws);
+        broadcastToRoom(currentRoom, {
+          type: 'cursor_position',
+          userId: msg.userId,
+          x: msg.x,
+          y: msg.y,
+          color: identity?.color ?? '#8b5cf6',
+          name: identity?.name ?? 'Unknown',
+          isDrawing: msg.isDrawing ?? false,
+        }, ws);
+      }
     } catch {
       console.log('Invalid message:', data.toString());
     }
@@ -232,6 +253,9 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     if (currentRoom) {
+      // Broadcast cursor leave before removing from room
+      broadcastCursorLeave(currentRoom, ws);
+
       const clients = rooms.get(currentRoom);
       if (clients) {
         clients.delete(ws);

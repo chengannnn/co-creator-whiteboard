@@ -12,9 +12,11 @@ interface RemoteCursor {
   y: number;
   color: string;
   name: string;
+  isDrawing: boolean;
 }
 
-const CURSOR_BROADCAST_THROTTLE = 50;
+const CURSOR_BROADCAST_THROTTLE = 33; // ~30fps
+
 const RECONNECT_BASE_DELAY = 500;
 const RECONNECT_MAX_DELAY = 5000;
 
@@ -43,6 +45,7 @@ function WhiteboardRoom() {
   const wsRef = useRef<WebSocket | null>(null);
   const shapesRef = useRef<Shape[]>([]);
   const userIdRef = useRef<string | null>(null);
+  const userColorRef = useRef<string>('#3b82f6');
   const isRemoteUpdate = useRef(false);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,6 +58,10 @@ function WhiteboardRoom() {
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
+
+  useEffect(() => {
+    userColorRef.current = userColor;
+  }, [userColor]);
 
   // Send shape mutation over WebSocket
   const sendShapeMutation = useCallback((type: string, data: { shape?: Shape; shapeId?: string }) => {
@@ -131,7 +138,14 @@ function WhiteboardRoom() {
                 y: msg.y,
                 color: msg.color,
                 name: msg.name,
+                isDrawing: msg.isDrawing ?? false,
               });
+              return next;
+            });
+          } else if (msg.type === 'cursor_leave' && msg.userId) {
+            setRemoteCursors((prev) => {
+              const next = new Map(prev);
+              next.delete(msg.userId);
               return next;
             });
           }
@@ -227,8 +241,8 @@ function WhiteboardRoom() {
     }
   };
 
-  // Broadcast cursor position to other users (throttled)
-  const broadcastCursor = useCallback((x: number, y: number) => {
+  // Broadcast cursor position to other users (throttled to ~30fps)
+  const broadcastCursor = useCallback((x: number, y: number, isDrawing: boolean) => {
     const now = Date.now();
     if (now - lastCursorBroadcast.current < CURSOR_BROADCAST_THROTTLE) return;
     lastCursorBroadcast.current = now;
@@ -239,12 +253,13 @@ function WhiteboardRoom() {
           userId: userIdRef.current,
           x,
           y,
-          color: userColor,
+          color: userColorRef.current,
           name: userName,
+          isDrawing,
         })
       );
     }
-  }, [userColor, userName]);
+  }, [userName]);
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>

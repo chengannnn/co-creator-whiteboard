@@ -13,8 +13,8 @@ interface CanvasComponentProps {
   onSelectedIdChange: (id: string | null) => void;
   userId: string | null;
   shapeOwners: Map<string, string>;
-  remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string }>;
-  broadcastCursor: (x: number, y: number) => void;
+  remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string; isDrawing: boolean }>;
+  broadcastCursor: (x: number, y: number, isDrawing: boolean) => void;
 }
 
 type InteractionMode =
@@ -36,6 +36,22 @@ type ResizeHandle =
 
 const HANDLE_SIZE = 8;
 const BBOX_PADDING = 6;
+
+// Map hex colors to readable names for cursor labels (must match App.tsx mapping)
+const HEX_TO_COLOR_NAME: Record<string, string> = {
+  '#ef4444': 'Red',
+  '#f97316': 'Orange',
+  '#eab308': 'Yellow',
+  '#22c55e': 'Green',
+  '#06b6d4': 'Cyan',
+  '#3b82f6': 'Blue',
+  '#8b5cf6': 'Purple',
+  '#ec4899': 'Pink',
+  '#14b8a6': 'Teal',
+  '#f43f5e': 'Rose',
+  '#6366f1': 'Indigo',
+  '#84cc16': 'Lime',
+};
 
 export default function CanvasComponent({
   activeTool,
@@ -585,6 +601,7 @@ export default function CanvasComponent({
     const point = getCanvasPoint(e);
 
     if (interactionMode === 'drawing') {
+      broadcastCursor(point.x, point.y, true);
       if (activeTool === 'freehand') {
         currentPoints.current.push(point);
         redrawCanvas();
@@ -681,7 +698,7 @@ export default function CanvasComponent({
     }
 
     // Broadcast cursor position for presence
-    broadcastCursor(point.x, point.y);
+    broadcastCursor(point.x, point.y, false);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -786,44 +803,56 @@ export default function CanvasComponent({
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
       />
-      {Array.from(remoteCursors.values()).map((cursor) => (
-        <div
-          key={cursor.userId}
-          style={{
-            position: 'fixed',
-            left: cursor.x,
-            top: cursor.y,
-            pointerEvents: 'none',
-            zIndex: 1000,
-          }}
-        >
-          <svg width="20" height="24" viewBox="0 0 20 24" style={{ display: 'block' }}>
-            <path
-              d="M2 2 L2 18 L6.5 13.5 L10.5 20 L13 18.5 L9 12.5 L15 12.5 Z"
-              fill={cursor.color}
-              stroke="#ffffff"
-              strokeWidth="1.5"
-            />
-          </svg>
+      {Array.from(remoteCursors.values()).map((cursor) => {
+        const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
+        const displayName = colorName ? `${colorName} ${cursor.name}` : cursor.name;
+        return (
           <div
+            key={cursor.userId}
             style={{
-              position: 'absolute',
-              left: 12,
-              top: 8,
-              backgroundColor: cursor.color,
-              color: '#ffffff',
-              padding: '1px 6px',
-              borderRadius: 3,
-              fontSize: 11,
-              fontFamily: 'sans-serif',
-              whiteSpace: 'nowrap',
-              lineHeight: '16px',
+              position: 'fixed',
+              left: cursor.x,
+              top: cursor.y,
+              pointerEvents: 'none',
+              zIndex: 1000,
             }}
           >
-            {cursor.name}
+            <svg width="24" height="28" viewBox="0 0 24 28" style={{ display: 'block' }}>
+              {/* Pointer cursor */}
+              <path
+                d="M2 2 L2 18 L6.5 13.5 L10.5 20 L13 18.5 L9 12.5 L15 12.5 Z"
+                fill={cursor.color}
+                stroke="#ffffff"
+                strokeWidth="1.5"
+              />
+              {/* Pencil indicator when drawing */}
+              {cursor.isDrawing && (
+                <g transform="translate(16, 16)">
+                  <rect x="-4" y="-4" width="8" height="8" rx="1" fill="#fbbf24" stroke="#92400e" strokeWidth="0.8" />
+                  <line x1="-2" y1="-2" x2="2" y2="2" stroke="#92400e" strokeWidth="0.6" />
+                </g>
+              )}
+            </svg>
+            <div
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: 8,
+                backgroundColor: cursor.color,
+                color: '#ffffff',
+                padding: '1px 6px',
+                borderRadius: 3,
+                fontSize: 11,
+                fontFamily: 'sans-serif',
+                whiteSpace: 'nowrap',
+                lineHeight: '16px',
+              }}
+            >
+              {displayName}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {editingText && (
         <textarea
           ref={textInputRef}
