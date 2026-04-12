@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point } from '../types/shapes';
+import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE } from '../types/shapes';
 
 interface CanvasComponentProps {
   activeTool: ToolType;
@@ -8,6 +8,9 @@ interface CanvasComponentProps {
   onShapesChange: (shapes: Shape[]) => void;
   history: Shape[][];
   onHistoryChange: (history: Shape[][]) => void;
+  defaultStyle: ShapeStyle;
+  selectedId: string | null;
+  onSelectedIdChange: (id: string | null) => void;
 }
 
 type InteractionMode =
@@ -36,6 +39,9 @@ export default function CanvasComponent({
   onShapesChange,
   history,
   onHistoryChange,
+  defaultStyle,
+  selectedId,
+  onSelectedIdChange,
 }: CanvasComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
@@ -43,7 +49,6 @@ export default function CanvasComponent({
   const startPoint = useRef<Point>({ x: 0, y: 0 });
   const currentPoints = useRef<Point[]>([]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('idle');
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
   const moveOffset = useRef<Point>({ x: 0, y: 0 });
@@ -67,8 +72,8 @@ export default function CanvasComponent({
     const previous = history[history.length - 1];
     onHistoryChange(history.slice(0, -1));
     onShapesChange(previous);
-    setSelectedId(null);
-  }, [history, onHistoryChange, onShapesChange]);
+    onSelectedIdChange(null);
+  }, [history, onHistoryChange, onShapesChange, onSelectedIdChange]);
 
   // --- Helper functions (must be before redrawCanvas) ---
 
@@ -114,29 +119,34 @@ export default function CanvasComponent({
   const drawShape = (
     rc: RoughCanvas,
     shape: Shape,
-    strokeColor = '#000000'
   ) => {
+    const style = shape.style ?? DEFAULT_STYLE;
+    const opts = {
+      stroke: style.strokeColor,
+      strokeWidth: style.strokeWidth,
+      strokeDashArray: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
+      fill: style.fillStyle === 'none' ? undefined : style.fillColor,
+      fillStyle: style.fillStyle === 'hatch' ? 'cross-hatch' as const : style.fillStyle === 'solid' ? 'solid' as const : undefined,
+      hachureAngle: 60,
+      hachureGap: style.strokeWidth * 4,
+    };
+
     if (shape.type === 'rectangle') {
-      rc.rectangle(shape.x, shape.y, shape.width, shape.height, {
-        stroke: strokeColor,
-        strokeWidth: 2,
-      });
+      rc.rectangle(shape.x, shape.y, shape.width, shape.height, opts);
     } else if (shape.type === 'ellipse') {
       rc.ellipse(
         shape.x + shape.width / 2,
         shape.y + shape.height / 2,
         Math.abs(shape.width),
         Math.abs(shape.height),
-        {
-          stroke: strokeColor,
-          strokeWidth: 2,
-        }
+        opts,
       );
     } else if (shape.type === 'freehand') {
       if (shape.points.length > 1) {
         rc.linearPath(shape.points.map((p) => [p.x, p.y]), {
-          stroke: strokeColor,
-          strokeWidth: 2,
+          stroke: style.strokeColor,
+          strokeWidth: style.strokeWidth,
+          strokeDashArray: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
         });
       }
     }
@@ -222,17 +232,17 @@ export default function CanvasComponent({
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
         e.preventDefault();
         pushHistory(shapes.filter((s) => s.id !== selectedId));
-        setSelectedId(null);
+        onSelectedIdChange(null);
       }
 
       if (e.key === 'Escape') {
-        setSelectedId(null);
+        onSelectedIdChange(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undo, pushHistory]);
+  }, [selectedId, shapes, undo, pushHistory, onSelectedIdChange]);
 
   // --- Shape hit detection ---
 
@@ -408,12 +418,12 @@ export default function CanvasComponent({
 
     const hitShape = hitTestShapes(point);
     if (hitShape) {
-      setSelectedId(hitShape.id);
+      onSelectedIdChange(hitShape.id);
       const bounds = getShapeBounds(hitShape);
       moveOffset.current = { x: point.x - bounds.x, y: point.y - bounds.y };
       setInteractionMode('moving');
     } else {
-      setSelectedId(null);
+      onSelectedIdChange(null);
       setInteractionMode('selecting');
     }
   };
@@ -429,8 +439,8 @@ export default function CanvasComponent({
         const rc = roughCanvasRef.current;
         if (rc && currentPoints.current.length > 1) {
           rc.linearPath(currentPoints.current.map((p) => [p.x, p.y]), {
-            stroke: '#000000',
-            strokeWidth: 2,
+            stroke: defaultStyle.strokeColor,
+            strokeWidth: defaultStyle.strokeWidth,
           });
         }
       } else {
@@ -446,13 +456,13 @@ export default function CanvasComponent({
 
         if (activeTool === 'rectangle') {
           rc.rectangle(x, y, width, height, {
-            stroke: '#000000',
-            strokeWidth: 2,
+            stroke: defaultStyle.strokeColor,
+            strokeWidth: defaultStyle.strokeWidth,
           });
         } else if (activeTool === 'ellipse') {
           rc.ellipse(x + width / 2, y + height / 2, width, height, {
-            stroke: '#000000',
-            strokeWidth: 2,
+            stroke: defaultStyle.strokeColor,
+            strokeWidth: defaultStyle.strokeWidth,
           });
         }
       }
@@ -532,7 +542,7 @@ export default function CanvasComponent({
         const width = Math.abs(point.x - start.x);
         const height = Math.abs(point.y - start.y);
         if (width > 3 && height > 3) {
-          newShape = { id: generateId(), type: 'rectangle', x, y, width, height };
+          newShape = { id: generateId(), type: 'rectangle', x, y, width, height, style: { ...defaultStyle } };
         }
       } else if (activeTool === 'ellipse') {
         const x = Math.min(start.x, point.x);
@@ -540,7 +550,7 @@ export default function CanvasComponent({
         const width = Math.abs(point.x - start.x);
         const height = Math.abs(point.y - start.y);
         if (width > 3 && height > 3) {
-          newShape = { id: generateId(), type: 'ellipse', x, y, width, height };
+          newShape = { id: generateId(), type: 'ellipse', x, y, width, height, style: { ...defaultStyle } };
         }
       } else if (activeTool === 'freehand') {
         if (currentPoints.current.length > 2) {
@@ -548,6 +558,7 @@ export default function CanvasComponent({
             id: generateId(),
             type: 'freehand',
             points: [...currentPoints.current],
+            style: { ...defaultStyle },
           };
         }
       }

@@ -41,7 +41,7 @@
       "title": "Shape Selection and Manipulation",
       "description": "Allow users to select shapes, move them, resize via handles, and delete them. Include basic undo support.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Clicking a shape selects it (shows bounding box with resize handles)",
         "Dragging a selected shape moves it",
@@ -57,7 +57,7 @@
       "title": "Shape Styling",
       "description": "Add a properties bar for changing stroke color, fill color, stroke width, stroke style, and fill style of selected shapes.",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Properties panel shows styling options when a shape is selected",
         "Color picker with 8+ preset colors and custom color support",

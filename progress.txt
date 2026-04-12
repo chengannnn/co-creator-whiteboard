@@ -6,6 +6,7 @@
 - Backend ESLint needs `globals.node` to avoid no-undef errors for process/console
 - Dev servers: frontend on port 5173, backend on port 3001
 - Vite proxies `/api` and `/ws` to backend during development
+- Pure utility functions used by `useCallback` may need `/* eslint-disable react-hooks/exhaustive-deps */` if they don't depend on component state — ESLint auto-fix wraps them in `useCallback` which can cause parse errors
 
 ---
 
@@ -37,4 +38,32 @@
   - `tsconfig.json` has `noUnusedLocals: true` and `noUnusedParameters: true` — clean imports carefully
   - Canvas needs to be resized on window resize and roughCanvas recreated after each resize
   - Freehand shapes store raw point arrays; rectangles/ellipses store bounding boxes
+---
+
+## [2026-04-12] - story-3
+- Implemented shape selection and manipulation
+- Features: click to select with dashed bounding box + 8 resize handles, drag to move, resize via handles, Delete/Backspace to remove, Escape to deselect, Ctrl+Z undo
+- Files changed:
+  - packages/frontend/src/App.tsx: added history state for undo support
+  - packages/frontend/src/components/CanvasComponent.tsx: added selection, move, resize, delete, and undo logic with interaction mode state machine
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - ESLint auto-fix wraps pure functions in `useCallback` with `[]` deps — this can cause parse errors; use file-level `eslint-disable` comment instead
+  - History-based undo stores full snapshots of shapes array (simple but memory-heavy for large canvases)
+  - Interaction modes (`idle`, `drawing`, `selecting`, `moving`, `resizing`) prevent conflicting mouse behaviors
+---
+
+## [2026-04-12] - story-4
+- Implemented shape styling with properties panel
+- Features: stroke color (9 presets + custom), fill color (9 presets + custom), stroke width (1/2/4px), stroke style (solid/dashed), fill style (none/solid/hatch)
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added ShapeStyle interface, StrokeWidth/StrokeStyle/FillStyle types, DEFAULT_STYLE constant, style field on all shape types
+  - packages/frontend/src/components/PropertiesPanel.tsx: new right-side panel showing style controls when shape is selected
+  - packages/frontend/src/components/CanvasComponent.tsx: updated drawShape to use shape.style properties, shape creation uses current defaultStyle
+  - packages/frontend/src/App.tsx: lifted selectedId state, integrated PropertiesPanel, handleStyleChange updates both selected shape and default style
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - rough.js `strokeStyle` accepts 'solid' | 'dashed' directly, not CanvasLineCap
+  - rough.js `fillStyle` uses 'hachure' for hatch patterns, not 'hatch'
+  - Style state flows: PropertiesPanel -> App handleStyleChange -> { updates defaultStyle for new shapes + updates selected shape in shapes array }
 ---
