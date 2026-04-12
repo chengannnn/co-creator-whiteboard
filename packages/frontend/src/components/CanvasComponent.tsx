@@ -944,26 +944,6 @@ export default function CanvasComponent({
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
       />
-      {/* Zoom level indicator */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          padding: '4px 10px',
-          fontSize: 12,
-          fontFamily: 'monospace',
-          color: '#374151',
-          zIndex: 100,
-          userSelect: 'none',
-          pointerEvents: 'none',
-        }}
-      >
-        {Math.round(scale * 100)}%
-      </div>
       {Array.from(remoteCursors.values()).map((cursor) => {
         const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
         const displayName = colorName ? `${colorName} ${cursor.name}` : cursor.name;

@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import BottomPanel from './components/BottomPanel';
 import Toolbar from './components/Toolbar';
 import CanvasComponent from './components/CanvasComponent';
-import PropertiesPanel from './components/PropertiesPanel';
-import RoomHeader from './components/RoomHeader';
 import { ToolType, Shape, ShapeStyle, DEFAULT_STYLE } from './types/shapes';
 
 interface RemoteCursor {
@@ -26,6 +25,7 @@ function WhiteboardRoom() {
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [history, setHistory] = useState<Shape[][]>([]);
   const [defaultStyle, setDefaultStyle] = useState<ShapeStyle>(DEFAULT_STYLE);
+  void setDefaultStyle; // re-enabled in v2-story-5
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [userCount, setUserCount] = useState(1);
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
@@ -235,16 +235,16 @@ function WhiteboardRoom() {
     [sendShapeMutation]
   );
 
-  const selectedShape = shapes.find((s) => s.id === selectedId) ?? null;
-
-  const handleStyleChange = (style: ShapeStyle) => {
-    setDefaultStyle(style);
-    if (selectedId) {
-      onShapesChange((prev) =>
-        prev.map((s) => (s.id === selectedId ? { ...s, style } : s))
-      );
-    }
-  };
+  // Re-enabled in v2-story-5 (properties panel)
+  // const selectedShape = shapes.find((s) => s.id === selectedId) ?? null;
+  // const handleStyleChange = (style: ShapeStyle) => {
+  //   setDefaultStyle(style);
+  //   if (selectedId) {
+  //     onShapesChange((prev) =>
+  //       prev.map((s) => (s.id === selectedId ? { ...s, style } : s))
+  //     );
+  //   }
+  // };
 
   // Broadcast cursor position to other users (throttled to ~30fps)
   const broadcastCursor = useCallback((x: number, y: number, isDrawing: boolean) => {
@@ -269,7 +269,6 @@ function WhiteboardRoom() {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
-      <RoomHeader roomId={roomId ?? 'unknown'} userCount={userCount} wsStatus={wsStatus} />
       <CanvasComponent
         activeTool={activeTool}
         shapes={shapes}
@@ -290,10 +289,11 @@ function WhiteboardRoom() {
         onPanYChange={setPanY}
         onScaleChange={setScale}
       />
-      <PropertiesPanel
-        selectedShape={selectedShape}
-        onStyleChange={handleStyleChange}
-        defaultStyle={defaultStyle}
+      <BottomPanel
+        roomId={roomId ?? 'unknown'}
+        userCount={userCount}
+        wsStatus={wsStatus}
+        scale={scale}
       />
     </div>
   );

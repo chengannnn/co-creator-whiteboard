@@ -1,152 +1,104 @@
 {
-  "title": "Online Collaborative Whiteboard MVP",
-  "branchName": "feature/collaborative-whiteboard-mvp",
+  "title": "Whiteboard MVP v2 - UI Redesign",
+  "branchName": "feature/whiteboard-v2-redesign",
   "userStories": [
     {
-      "id": "story-1",
-      "title": "Project Scaffolding",
-      "description": "Set up a monorepo with frontend (React + Vite + TypeScript) and backend (Node.js + Express + ws) packages. Include TypeScript strict mode, ESLint, and concurrent dev scripts.",
+      "id": "v2-story-1",
+      "title": "Excalidraw-Style Layout",
+      "description": "Redesign the entire layout to match Excalidraw: remove the left sidebar toolbar, replace with a top-centered floating toolbar with white semi-transparent background, rounded corners, and subtle shadow. Move room info/user count/zoom to bottom-right floating panel. Remove the right-side properties panel. Maximize canvas area.",
       "priority": 1,
       "passes": true,
       "acceptanceCriteria": [
-        "Monorepo structure with packages/frontend and packages/backend",
-        "Vite + React + TypeScript dev server runs on port 5173",
-        "Node.js + Express server runs on port 3001",
-        "TypeScript strict mode enabled",
-        "npm run dev starts both frontend and backend concurrently",
-        "ESLint configured with basic rules",
-        "Root package.json with workspace configuration"
-      ],
-      "estimate": "small"
-    },
-    {
-      "id": "story-2",
-      "title": "Canvas with Basic Drawing Tools",
-      "description": "Implement a full-screen canvas with a left toolbar offering Select, Rectangle, Ellipse, and Freehand (Pencil) tools. Shapes render with hand-drawn aesthetic via rough.js.",
-      "priority": 2,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Full-screen canvas area with white background",
-        "Toolbar on the left side with tool buttons: Select, Rectangle, Ellipse, Freehand",
-        "Click and drag to draw rectangles and ellipses",
-        "Freehand drawing follows mouse/pen movement",
-        "Shapes render with hand-drawn aesthetic (rough.js)",
-        "Selected tool is visually highlighted in toolbar",
-        "Drawing works smoothly at 60fps"
-      ],
-      "estimate": "medium"
-    },
-    {
-      "id": "story-3",
-      "title": "Shape Selection and Manipulation",
-      "description": "Allow users to select shapes, move them, resize via handles, and delete them. Include basic undo support.",
-      "priority": 3,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Clicking a shape selects it (shows bounding box with resize handles)",
-        "Dragging a selected shape moves it",
-        "Dragging resize handles resizes the shape",
-        "Pressing Delete/Backspace removes the selected shape",
-        "Clicking empty canvas deselects",
-        "Undo (Ctrl+Z) works for the last action"
-      ],
-      "estimate": "medium"
-    },
-    {
-      "id": "story-4",
-      "title": "Shape Styling",
-      "description": "Add a properties bar for changing stroke color, fill color, stroke width, stroke style, and fill style of selected shapes.",
-      "priority": 4,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Properties panel shows styling options when a shape is selected",
-        "Color picker with 8+ preset colors and custom color support",
-        "Stroke width selector: thin (1px), medium (2px), thick (4px)",
-        "Fill toggle: none, solid, hatch",
-        "Stroke style: solid, dashed",
-        "Changes apply immediately to selected shape",
-        "Defaults: black stroke, 2px width, no fill"
-      ],
-      "estimate": "small"
-    },
-    {
-      "id": "story-5",
-      "title": "Text Tool",
-      "description": "Add a text tool that lets users place editable text on the canvas, which can be moved and styled like other shapes.",
-      "priority": 5,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Text tool in toolbar",
-        "Clicking canvas creates editable text field",
-        "Enter or clicking away finishes editing",
-        "Text can be selected, moved, and resized",
-        "Default font: system sans-serif, 20px",
-        "Text content stored in shape data model"
-      ],
-      "estimate": "small"
-    },
-    {
-      "id": "story-6",
-      "title": "Room-Based Collaboration",
-      "description": "Implement room creation and joining via unique URL. Display room ID, share button, and user count.",
-      "priority": 6,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Visiting / generates unique room ID and redirects to /room/:roomId",
-        "Visiting /room/:roomId joins that room",
-        "Room ID is short, readable string (e.g., a3f7k2)",
-        "Share button copies room URL to clipboard",
-        "Current user count displayed",
-        "Room cleaned up 5 minutes after last user leaves"
-      ],
-      "estimate": "small"
-    },
-    {
-      "id": "story-7",
-      "title": "Real-Time Shape Sync",
-      "description": "Broadcast shape create/update/delete events to all users in the room via WebSocket. Handle disconnect/reconnect gracefully.",
-      "priority": 7,
-      "passes": true,
-      "acceptanceCriteria": [
-        "Shape changes appear on all users' canvases within 200ms",
-        "WebSocket connects on room join, sends full canvas state",
-        "Delta updates broadcast per mutation",
-        "Concurrent edits merged without conflicts (last-write-wins acceptable)",
-        "Disconnect shows Reconnecting banner; reconnect re-syncs full state",
-        "Shapes from other users attributed with colored border"
+        "Canvas area occupies almost entire viewport (only top toolbar takes space)",
+        "Left sidebar toolbar completely removed",
+        "Top-centered floating toolbar with white semi-transparent background, rounded corners, subtle shadow",
+        "Toolbar centered horizontally, ~12px from top",
+        "Room info (room ID, share button, user count, zoom) moved to bottom-right floating panel",
+        "Toolbar supports minimize/hide toggle",
+        "Clicking empty canvas does not accidentally trigger toolbar interactions",
+        "Old right-side PropertiesPanel removed"
       ],
       "estimate": "large"
     },
     {
-      "id": "story-8",
-      "title": "Live Cursor Presence",
-      "description": "Show other users' cursors with colored pointers and random names, updated in real-time.",
-      "priority": 8,
-      "passes": true,
+      "id": "v2-story-2",
+      "title": "Yellow Color Theme",
+      "description": "Apply a warm light yellow color theme throughout the application. Canvas background changes from white to light yellow. Toolbar, buttons, and all UI elements follow the same yellow palette. Text colors adjusted for contrast.",
+      "priority": 2,
+      "passes": false,
       "acceptanceCriteria": [
-        "Each user assigned random color and random name (e.g., Purple Fox)",
-        "Other users' cursors rendered as colored pointers with name labels",
-        "Cursor position throttled to 30fps via WebSocket",
-        "Cursor disappears when user leaves",
-        "Drawing users show pencil indicator on cursor",
-        "Cursor names render on top layer, never overlapping shapes"
+        "Canvas background changed to light yellow (#FFFEF0 or #FFF8E7)",
+        "Toolbar background: very light yellow (#FFFDF5) with 92% opacity",
+        "Tool button active state: yellow highlight (#FFF3C4)",
+        "Tool button hover state: light yellow background",
+        "Shape default stroke color remains black (sufficient contrast on yellow)",
+        "Bottom info panel uses same yellow theme as toolbar",
+        "Global text color adjusted to dark gray (#333) instead of pure black",
+        "All buttons, inputs, modals follow the same color scheme",
+        "Remote user cursor colors remain visible on yellow background",
+        "Theme colors managed via TailwindCSS custom variables"
       ],
       "estimate": "medium"
     },
     {
-      "id": "story-9",
-      "title": "Canvas Pan and Zoom",
-      "description": "Add mouse wheel zoom, middle-click/space+drag pan, zoom level indicator, and double-click reset.",
-      "priority": 9,
-      "passes": true,
+      "id": "v2-story-3",
+      "title": "Complete Button Functions with Keyboard Shortcuts",
+      "description": "Implement all toolbar buttons with full functionality and keyboard shortcuts. Select (V/1), Rectangle (R/2), Ellipse (O/3), Line (L/4), Freehand (P/5), Eraser (X/7). Include Ctrl+Z/Y undo/redo, Delete to remove, Escape to deselect, Ctrl+A select all. Each button shows tooltip with shortcut.",
+      "priority": 3,
+      "passes": false,
       "acceptanceCriteria": [
-        "Mouse wheel zooms in/out centered on cursor",
-        "Middle-click drag or space+drag pans the canvas",
-        "Zoom range: 10% to 500%",
-        "Zoom level indicator in bottom-right corner",
-        "Double-click on empty canvas resets zoom to 100%",
-        "All shapes render correctly at all zoom levels",
-        "Pan/zoom state is per-user (not shared)"
+        "Select tool (V/1): click to select, drag to move, resize handles, Delete to remove, Escape to deselect, Ctrl+A select all",
+        "Rectangle tool (R/2): click and drag to draw, preview during drawing, auto-select after creation",
+        "Ellipse tool (O/3): click and drag to draw, preview during drawing, auto-select after creation",
+        "Line tool (L/4): click and drag to draw straight line, preview during drawing",
+        "Freehand tool (P/5): hold and drag for freehand curves, release to finish",
+        "Eraser tool (X/7): click or drag to delete shapes, cursor shows eraser icon",
+        "Current active tool visually highlighted",
+        "Keyboard shortcuts work in all contexts",
+        "Tooltip or small text shows shortcut on each button",
+        "Clear Canvas button with confirmation dialog"
+      ],
+      "estimate": "large"
+    },
+    {
+      "id": "v2-story-4",
+      "title": "Double-Click Text Editing",
+      "description": "Remove the separate Text tool button from toolbar. Instead, double-clicking anywhere on the canvas opens an inline text editor. Text shapes can be edited by double-clicking existing text. No dedicated text tool needed.",
+      "priority": 4,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Double-click on empty canvas area opens inline text editor",
+        "Text editor: white background, light yellow border, auto-focused cursor",
+        "Press Enter or click elsewhere to confirm text",
+        "Confirmed text becomes a text shape (selectable, movable, resizable)",
+        "Text shape displays as borderless text (Excalidraw style)",
+        "Double-click existing text shape enters edit mode",
+        "Escape cancels editing without creating text",
+        "Empty text does not create a shape",
+        "Default font: 20px system sans-serif, dark gray",
+        "Text editor supports multi-line input",
+        "No standalone Text tool button in toolbar",
+        "Double-click does not conflict with shape dragging in Select mode"
+      ],
+      "estimate": "medium"
+    },
+    {
+      "id": "v2-story-5",
+      "title": "Properties Panel Integration",
+      "description": "When a shape is selected, show styling controls contextually below the toolbar (second floating row). Controls include: stroke color (8 presets + custom), fill color (8 presets + custom + none), stroke width (3 options), stroke style (solid/dashed), fill style (none/solid/hatch). When no shape selected, controls set defaults for new shapes.",
+      "priority": 5,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Selecting a shape expands toolbar or shows second floating panel below it",
+        "Stroke color: 8 preset color swatches + custom color picker (black, red, blue, green, purple, orange, brown, gray)",
+        "Fill color: 8 preset swatches + custom picker + none option",
+        "Stroke width: 3 visual options (thin/medium/thick) with icon representation",
+        "Stroke style: solid/dashed toggle buttons",
+        "Fill style: none/solid/hatch toggle buttons",
+        "When no shape selected, controls set default style for new shapes",
+        "When shape selected, modifying properties immediately updates that shape",
+        "Properties panel follows same yellow theme",
+        "Smooth transition animation for panel show/hide"
       ],
       "estimate": "medium"
     }
