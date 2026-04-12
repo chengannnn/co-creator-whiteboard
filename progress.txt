@@ -3,10 +3,12 @@
 - Backend uses ESM modules (`"type": "module"`) with tsx for development
 - Frontend uses Vite + React 19 + TypeScript strict mode
 - ESLint 9 flat config (eslint.config.js) required for both packages
-- Backend ESLint needs `globals.node` to avoid no-undef errors for process/console
+- Backend ESLint needs `typescript-eslint` (not just `globals.node`) to parse TypeScript generics like `Map<string, Set<WebSocket>>`
 - Dev servers: frontend on port 5173, backend on port 3001
 - Vite proxies `/api` and `/ws` to backend during development
 - Pure utility functions used by `useCallback` may need `/* eslint-disable react-hooks/exhaustive-deps */` if they don't depend on component state — ESLint auto-fix wraps them in `useCallback` which can cause parse errors
+- Room state is managed in-memory on backend using `Map<string, Set<WebSocket>>` with cleanup timers
+- WebSocket connection established on room mount; roomId sent via `join_room` message
 
 ---
 
