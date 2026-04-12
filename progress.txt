@@ -1,3 +1,23 @@
 ## Codebase Patterns
+- Monorepo uses npm workspaces with packages/frontend and packages/backend
+- Backend uses ESM modules (`"type": "module"`) with tsx for development
+- Frontend uses Vite + React 19 + TypeScript strict mode
+- ESLint 9 flat config (eslint.config.js) required for both packages
+- Backend ESLint needs `globals.node` to avoid no-undef errors for process/console
+- Dev servers: frontend on port 5173, backend on port 3001
+- Vite proxies `/api` and `/ws` to backend during development
 
+---
+
+## [2026-04-12] - story-1
+- Implemented project scaffolding with monorepo structure
+- Files changed:
+  - Root: package.json (workspace config), .gitignore
+  - packages/backend: Express + ws server, tsconfig.json, ESLint config
+  - packages/frontend: Vite + React + TypeScript setup, react-router-dom
+- Typecheck and lint pass for both packages
+- **Learnings for future iterations:**
+  - ESLint flat config requires explicit `globals.node` for backend TypeScript files
+  - Running ESLint from root needs `--config` flag pointing to package's config file
+  - npm workspaces resolve correctly with `npm run dev -w packages/<name>` pattern
 ---

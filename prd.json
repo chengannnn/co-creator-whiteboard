@@ -7,7 +7,7 @@
       "title": "Project Scaffolding",
       "description": "Set up a monorepo with frontend (React + Vite + TypeScript) and backend (Node.js + Express + ws) packages. Include TypeScript strict mode, ESLint, and concurrent dev scripts.",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Monorepo structure with packages/frontend and packages/backend",
         "Vite + React + TypeScript dev server runs on port 5173",
