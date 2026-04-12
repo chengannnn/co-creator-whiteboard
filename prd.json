@@ -24,7 +24,7 @@
       "title": "Canvas with Basic Drawing Tools",
       "description": "Implement a full-screen canvas with a left toolbar offering Select, Rectangle, Ellipse, and Freehand (Pencil) tools. Shapes render with hand-drawn aesthetic via rough.js.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Full-screen canvas area with white background",
         "Toolbar on the left side with tool buttons: Select, Rectangle, Ellipse, Freehand",

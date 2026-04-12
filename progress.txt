@@ -20,4 +20,21 @@
   - ESLint flat config requires explicit `globals.node` for backend TypeScript files
   - Running ESLint from root needs `--config` flag pointing to package's config file
   - npm workspaces resolve correctly with `npm run dev -w packages/<name>` pattern
+
+---
+
+## [2026-04-12] - story-2
+- Implemented canvas with basic drawing tools (Select, Rectangle, Ellipse, Freehand)
+- Files changed:
+  - packages/frontend/package.json: added roughjs dependency
+  - packages/frontend/src/types/shapes.ts: Shape type definitions (RectangleShape, EllipseShape, FreehandShape)
+  - packages/frontend/src/components/Toolbar.tsx: Left toolbar with tool buttons and active state highlighting
+  - packages/frontend/src/components/CanvasComponent.tsx: Full-screen canvas with rough.js rendering, mouse event handling for drawing
+  - packages/frontend/src/App.tsx: Integrated Toolbar and CanvasComponent into WhiteboardRoom route
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - roughjs has built-in TypeScript types (`roughjs/bin/canvas.js` exports `RoughCanvas`)
+  - `tsconfig.json` has `noUnusedLocals: true` and `noUnusedParameters: true` — clean imports carefully
+  - Canvas needs to be resized on window resize and roughCanvas recreated after each resize
+  - Freehand shapes store raw point arrays; rectangles/ellipses store bounding boxes
 ---
