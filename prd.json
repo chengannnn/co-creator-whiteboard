@@ -138,7 +138,7 @@
       "title": "Canvas Pan and Zoom",
       "description": "Add mouse wheel zoom, middle-click/space+drag pan, zoom level indicator, and double-click reset.",
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Mouse wheel zooms in/out centered on cursor",
         "Middle-click drag or space+drag pans the canvas",
