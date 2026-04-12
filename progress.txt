@@ -329,3 +329,24 @@ Started: Sun Apr 12 16:08:46     2026
   - Removing UI sections from PropertiesPanel (Fill Color, Fill Style) simplifies the panel by ~140 lines of code
   - `getBaseShapeTool()` helper is a clean way to extend ToolType without duplicating drawing/hit-testing logic for each variant
 ---
+
+## [2026-04-12] - v2-redesign-7
+- Implemented unified color picker bar
+- Changes:
+  - Toolbar: added second row with 10 color buttons + custom color picker (+ button)
+  - Colors: black, red, blue, green, purple, orange, brown, gray, pink, cyan
+  - Selected color applies to both strokeColor and fillColor simultaneously
+  - Added `unifiedColor` state in App.tsx, synced when selecting existing shapes
+  - PropertiesPanel: removed Stroke Color section (kept Width and Style)
+  - PropertiesPanel repositioned at top: 120px (below two-row toolbar)
+- Files changed:
+  - packages/frontend/src/App.tsx: added unifiedColor state, handleColorChange function, useEffect to sync color on shape selection
+  - packages/frontend/src/components/Toolbar.tsx: two-row layout, UNIFIED_COLORS constant, circular color swatches with active border, custom color picker
+  - packages/frontend/src/components/PropertiesPanel.tsx: removed stroke color selector section, repositioned below taller toolbar
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Unified color means a single `unifiedColor` state drives both strokeColor and fillColor — no separate color management needed
+  - When selecting existing shapes, unifiedColor should sync to the shape's strokeColor so the picker reflects current selection
+  - Color swatches use circular borders (borderRadius: '50%') to distinguish from the square ones in PropertiesPanel
+
+---

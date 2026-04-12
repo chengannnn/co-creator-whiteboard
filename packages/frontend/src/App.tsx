@@ -27,6 +27,7 @@ function WhiteboardRoom() {
   const [history, setHistory] = useState<Shape[][]>([]);
   const [forwardHistory, setForwardHistory] = useState<Shape[][]>([]);
   const [defaultStyle, setDefaultStyle] = useState<ShapeStyle>(DEFAULT_STYLE);
+  const [unifiedColor, setUnifiedColor] = useState<string>(DEFAULT_STYLE.strokeColor);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [userCount, setUserCount] = useState(1);
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
@@ -252,11 +253,36 @@ function WhiteboardRoom() {
     setDefaultStyle((prev) => ({ ...prev, fillStyle: fill }));
   };
 
+  // Unified color: update both stroke and fill colors
+  const handleColorChange = (color: string) => {
+    setUnifiedColor(color);
+    setDefaultStyle((prev) => ({ ...prev, strokeColor: color, fillColor: color }));
+    if (selectedIds.length > 0) {
+      onShapesChange((prev) =>
+        prev.map((s) =>
+          selectedIds.includes(s.id)
+            ? { ...s, style: { ...s.style, strokeColor: color, fillColor: color } }
+            : s
+        )
+      );
+    }
+  };
+
   // Determine which style to show in properties panel (selected shape or defaults)
   const panelStyle = (() => {
     const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
     return selectedShape ? selectedShape.style : defaultStyle;
   })();
+
+  // Sync unifiedColor when selecting existing shapes
+  useEffect(() => {
+    const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
+    if (selectedShape) {
+      setUnifiedColor(selectedShape.style.strokeColor);
+    } else {
+      setUnifiedColor(defaultStyle.strokeColor);
+    }
+  }, [selectedIds, shapes, defaultStyle.strokeColor]);
 
   // Keyboard shortcuts: tool switching, undo/redo, select all
   useEffect(() => {
@@ -416,7 +442,7 @@ function WhiteboardRoom() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onFillStyleChange={handleFillStyleChange} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onFillStyleChange={handleFillStyleChange} onColorChange={handleColorChange} unifiedColor={unifiedColor} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
       <PropertiesPanel style={panelStyle} onStyleChange={handleStyleChange} />
       <CanvasComponent
         activeTool={activeTool}

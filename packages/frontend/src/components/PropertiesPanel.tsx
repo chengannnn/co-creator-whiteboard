@@ -1,17 +1,6 @@
 import { ShapeStyle } from '../types/shapes';
 import { theme } from '../theme';
 
-const STROKE_COLORS = [
-  '#000000', // black
-  '#e03131', // red
-  '#1c7ed6', // blue
-  '#2f9e44', // green
-  '#6741d9', // purple
-  '#e8590c', // orange
-  '#a0522d', // brown
-  '#868e96', // gray
-];
-
 interface PropertiesPanelProps {
   style: ShapeStyle;
   onStyleChange: (style: ShapeStyle) => void;
@@ -26,7 +15,7 @@ export default function PropertiesPanel({ style, onStyleChange }: PropertiesPane
     <div
       style={{
         position: 'fixed',
-        top: '62px',
+        top: '120px',
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
@@ -42,60 +31,6 @@ export default function PropertiesPanel({ style, onStyleChange }: PropertiesPane
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Stroke Color */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-        <span style={{ fontSize: '10px', color: theme.textMuted, lineHeight: 1 }}>Stroke</span>
-        <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
-          {STROKE_COLORS.map((color) => (
-            <button
-              key={color}
-              title={color}
-              onClick={() => updateStyle({ strokeColor: color })}
-              style={{
-                width: '22px',
-                height: '22px',
-                borderRadius: '4px',
-                backgroundColor: color,
-                border:
-                  style.strokeColor === color
-                    ? `2px solid ${theme.btnActiveBorder}`
-                    : '1px solid rgba(0,0,0,0.12)',
-                cursor: 'pointer',
-                padding: 0,
-                transition: 'all 0.15s ease',
-              }}
-            />
-          ))}
-          <label
-            title="Custom stroke color"
-            style={{
-              width: '22px',
-              height: '22px',
-              borderRadius: '4px',
-              border: `1px solid ${theme.btnBorder}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: theme.textMuted,
-              backgroundColor: theme.btnHoverBg,
-            }}
-          >
-            +
-            <input
-              type="color"
-              value={style.strokeColor}
-              onChange={(e) => updateStyle({ strokeColor: e.target.value })}
-              style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div style={{ width: '1px', height: '32px', backgroundColor: theme.divider }} />
-
       {/* Stroke Width */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
         <span style={{ fontSize: '10px', color: theme.textMuted, lineHeight: 1 }}>Width</span>
