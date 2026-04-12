@@ -151,6 +151,14 @@ export default function CanvasComponent({
     [panX, panY, scale]
   );
 
+  // Apply pan/scale transform to canvas context
+  const applyCanvasTransform = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      ctx.setTransform(scale, 0, 0, scale, panX, panY);
+    },
+    [panX, panY, scale]
+  );
+
   // --- Helper functions (must be before redrawCanvas) ---
 
   const getShapeBounds = (shape: Shape): { x: number; y: number; width: number; height: number } => {
@@ -273,6 +281,10 @@ export default function CanvasComponent({
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Apply pan/scale transform for all drawing
+    ctx.save();
+    applyCanvasTransform(ctx);
+
     for (const shape of shapes) {
       drawShape(roughCanvas, shape);
     }
@@ -285,7 +297,7 @@ export default function CanvasComponent({
         const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
         ctx.save();
         ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 / scale;
         ctx.setLineDash([]);
         ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
         ctx.restore();
@@ -302,26 +314,26 @@ export default function CanvasComponent({
       // Use owner color for remote shapes, default blue for own shapes
       const ownerId = shapeOwners.get(shape.id);
       const isRemote = ownerId && ownerId !== userId;
-      ctx.save();
       ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = 1.5 / scale;
+      ctx.setLineDash([5 / scale, 3 / scale]);
       ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
       ctx.setLineDash([]);
 
       const handles = getHandlePositions(bbox);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 / scale;
 
       for (const pos of Object.values(handles)) {
-        ctx.fillRect(pos.x, pos.y, HANDLE_SIZE, HANDLE_SIZE);
-        ctx.strokeRect(pos.x, pos.y, HANDLE_SIZE, HANDLE_SIZE);
+        const hs = HANDLE_SIZE / scale;
+        ctx.fillRect(pos.x, pos.y, hs, hs);
+        ctx.strokeRect(pos.x, pos.y, hs, hs);
       }
-
-      ctx.restore();
     }
-  }, [shapes, selectedId, getBBox, getHandlePositions, userId, shapeOwners]);
+
+    ctx.restore();
+  }, [shapes, selectedId, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -341,7 +353,7 @@ export default function CanvasComponent({
 
   useEffect(() => {
     redrawCanvas();
-  }, [shapes, selectedId, redrawCanvas]);
+  }, [shapes, selectedId, redrawCanvas, scale]);
 
   // --- Keyboard handlers ---
 
@@ -370,6 +382,30 @@ export default function CanvasComponent({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedId, shapes, undo, pushHistory, onSelectedIdChange]);
 
+  // Track space key state for pan modifier
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        spacePressed.current = true;
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        spacePressed.current = false;
+        if (interactionMode === 'panning') {
+          setInteractionMode('idle');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [interactionMode]);
+
   // Focus text input when editing starts
   useEffect(() => {
     if (editingText && textInputRef.current) {
@@ -397,31 +433,6 @@ export default function CanvasComponent({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingText, shapes]);
   /* eslint-enable react-hooks/exhaustive-deps */
-
-  // --- Space key tracking for pan ---
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ' && e.target === document.body) {
-        e.preventDefault();
-        spacePressed.current = true;
-      }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === ' ') {
-        spacePressed.current = false;
-        if (interactionMode === 'panning') {
-          setInteractionMode('idle');
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [interactionMode]);
 
   // --- Wheel handler for zoom ---
 
@@ -499,13 +510,14 @@ export default function CanvasComponent({
     const bbox = getBBox(selected);
     if (!bbox) return null;
     const handles = getHandlePositions(bbox);
+    const scaledHandleSize = HANDLE_SIZE / scale;
 
     for (const [handle, pos] of Object.entries(handles)) {
       if (
         point.x >= pos.x &&
-        point.x <= pos.x + HANDLE_SIZE &&
+        point.x <= pos.x + scaledHandleSize &&
         point.y >= pos.y &&
-        point.y <= pos.y + HANDLE_SIZE
+        point.y <= pos.y + scaledHandleSize
       ) {
         return handle as ResizeHandle;
       }
@@ -882,14 +894,6 @@ export default function CanvasComponent({
     const point = getCanvasPoint(e);
     const hitShape = hitTestShapes(point);
 
-    // Double-click on empty canvas resets zoom
-    if (!hitShape) {
-      onScaleChange(1);
-      onPanXChange(0);
-      onPanYChange(0);
-      return;
-    }
-
     if (hitShape?.type === 'text') {
       const textShape = hitShape as TextShape;
       setEditingText({
@@ -899,6 +903,11 @@ export default function CanvasComponent({
         content: textShape.content,
         fontSize: textShape.fontSize,
       });
+    } else if (!hitShape) {
+      // Double-click on empty canvas resets zoom to 100%
+      onScaleChange(1);
+      onPanXChange(0);
+      onPanYChange(0);
     }
   };
 
@@ -919,47 +928,39 @@ export default function CanvasComponent({
 
   return (
     <>
-      <div
+      <canvas
+        ref={canvasRef}
         style={{
-          position: 'relative',
+          display: 'block',
           width: '100vw',
           height: '100vh',
-          overflow: 'hidden',
+          cursor: cursorStyle,
         }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
         onWheel={handleWheel}
+      />
+      {/* Zoom level indicator */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid #e5e7eb',
+          borderRadius: 6,
+          padding: '4px 10px',
+          fontSize: 12,
+          fontFamily: 'monospace',
+          color: '#374151',
+          zIndex: 100,
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}
       >
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: 'block',
-            transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
-            transformOrigin: '0 0',
-            cursor: cursorStyle,
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onDoubleClick={handleDoubleClick}
-        />
-        {/* Zoom level indicator */}
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 16,
-            right: 16,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            padding: '4px 10px',
-            fontSize: 12,
-            fontFamily: 'monospace',
-            color: '#374151',
-            zIndex: 100,
-            userSelect: 'none',
-          }}
-        >
-          {Math.round(scale * 100)}%
-        </div>
+        {Math.round(scale * 100)}%
       </div>
       {Array.from(remoteCursors.values()).map((cursor) => {
         const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
