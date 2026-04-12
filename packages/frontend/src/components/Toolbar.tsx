@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ToolType } from '../types/shapes';
 import { theme } from '../theme';
 
@@ -17,10 +16,27 @@ interface ToolbarProps {
   activeTool: ToolType;
   onToolChange: (tool: ToolType) => void;
   onClearCanvas?: () => void;
+  onImageInsert?: (dataUrl: string) => void;
 }
 
-export default function Toolbar({ activeTool, onToolChange, onClearCanvas }: ToolbarProps) {
-  const [minimized, setMinimized] = useState(false);
+export default function Toolbar({ activeTool, onToolChange, onClearCanvas, onImageInsert }: ToolbarProps) {
+  const handleImageClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target?.result && typeof ev.target.result === 'string') {
+          onImageInsert?.(ev.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
 
   return (
     <div
@@ -32,7 +48,7 @@ export default function Toolbar({ activeTool, onToolChange, onClearCanvas }: Too
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
-        padding: minimized ? '6px 10px' : '8px 12px',
+        padding: '8px 12px',
         backgroundColor: theme.panelBg,
         borderRadius: '10px',
         boxShadow: `0 2px 12px ${theme.panelShadow}`,
@@ -42,112 +58,119 @@ export default function Toolbar({ activeTool, onToolChange, onClearCanvas }: Too
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Minimize toggle */}
-      <button
-        title={minimized ? 'Expand toolbar' : 'Minimize toolbar'}
-        onClick={() => setMinimized(!minimized)}
+      {TOOLS.map((tool) => (
+        <button
+          key={tool.id}
+          title={`${tool.label} (${tool.shortcut})`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToolChange(tool.id);
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: activeTool === tool.id ? `2px solid ${theme.btnActiveBorder}` : '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: activeTool === tool.id ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '16px',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (activeTool !== tool.id) {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTool !== tool.id) {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+            }
+          }}
+        >
+          {tool.icon}
+        </button>
+      ))}
+
+      {/* Divider */}
+      <div
         style={{
-          width: '32px',
-          height: '32px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: `1px solid ${theme.btnBorder}`,
-          borderRadius: '6px',
-          backgroundColor: theme.btnHoverBg,
-          cursor: 'pointer',
-          fontSize: '14px',
-          color: theme.textMuted,
-          flexShrink: 0,
+          width: '1px',
+          height: '24px',
+          backgroundColor: theme.divider,
+          margin: '0 4px',
         }}
-      >
-        {minimized ? '▸' : '▾'}
-      </button>
+      />
 
-      {!minimized && (
-        <>
-          {TOOLS.map((tool) => (
-            <button
-              key={tool.id}
-              title={`${tool.label} (${tool.shortcut})`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToolChange(tool.id);
-              }}
-              style={{
-                width: '40px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: activeTool === tool.id ? `2px solid ${theme.btnActiveBorder}` : '1px solid transparent',
-                borderRadius: '6px',
-                backgroundColor: activeTool === tool.id ? theme.btnActiveBg : theme.btnDefaultBg,
-                cursor: 'pointer',
-                fontSize: '16px',
-                color: theme.textPrimary,
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (activeTool !== tool.id) {
-                  (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTool !== tool.id) {
-                  (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
-                }
-              }}
-            >
-              {tool.icon}
-            </button>
-          ))}
+      {/* Image button */}
+      {onImageInsert && (
+        <button
+          title="Insert Image (I)"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleImageClick();
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '16px',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+          }}
+        >
+          🖼
+        </button>
+      )}
 
-          {/* Divider */}
-          <div
-            style={{
-              width: '1px',
-              height: '24px',
-              backgroundColor: theme.divider,
-              margin: '0 4px',
-            }}
-          />
-
-          {/* Clear Canvas button */}
-          {onClearCanvas && (
-            <button
-              title="Clear Canvas"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClearCanvas();
-              }}
-              style={{
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid transparent',
-                borderRadius: '6px',
-                backgroundColor: theme.btnDefaultBg,
-                cursor: 'pointer',
-                fontSize: '16px',
-                color: theme.textSecondary,
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#fee2e2';
-                (e.target as HTMLElement).style.color = '#dc2626';
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
-                (e.target as HTMLElement).style.color = theme.textSecondary;
-              }}
-            >
-              🗑
-            </button>
-          )}
-        </>
+      {/* Clear Canvas button */}
+      {onClearCanvas && (
+        <button
+          title="Clear Canvas"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClearCanvas();
+          }}
+          style={{
+            width: '36px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '16px',
+            color: theme.textSecondary,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#fee2e2';
+            (e.target as HTMLElement).style.color = '#dc2626';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+            (e.target as HTMLElement).style.color = theme.textSecondary;
+          }}
+        >
+          🗑
+        </button>
       )}
     </div>
   );

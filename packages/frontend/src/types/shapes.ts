@@ -93,6 +93,18 @@ export interface ArrowShape {
   ownerId?: string;
 }
 
+export interface ImageShape {
+  id: string;
+  type: 'image';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  src: string;
+  style: ShapeStyle;
+  ownerId?: string;
+}
+
 export const DEFAULT_STYLE: ShapeStyle = {
   strokeColor: '#000000',
   strokeWidth: 2,
@@ -101,4 +113,4 @@ export const DEFAULT_STYLE: ShapeStyle = {
   fillColor: '#000000',
 };
 
-export type Shape = RectangleShape | EllipseShape | FreehandShape | LineShape | TextShape | RhombusShape | ArrowShape;
+export type Shape = RectangleShape | EllipseShape | FreehandShape | LineShape | TextShape | RhombusShape | ArrowShape | ImageShape;

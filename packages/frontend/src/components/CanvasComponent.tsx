@@ -119,6 +119,9 @@ export default function CanvasComponent({
   // Intermediate shapes during move/resize — avoids React state mutations on every mouseMove
   const moveShapesRef = useRef<Shape[] | null>(null);
 
+  // Image cache: src -> HTMLImageElement (avoids reloading images on every redraw)
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   useEffect(() => { panXRef.current = panX; }, [panX]);
@@ -328,6 +331,19 @@ export default function CanvasComponent({
         if (newWidth !== shape.width || newHeight !== shape.height) {
           shape.width = newWidth;
           shape.height = newHeight;
+        }
+      }
+    } else if (shape.type === 'image') {
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx) {
+        let img = imageCacheRef.current.get(shape.src);
+        if (!img) {
+          img = new Image();
+          img.src = shape.src;
+          imageCacheRef.current.set(shape.src, img);
+        }
+        if (img.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
         }
       }
     }

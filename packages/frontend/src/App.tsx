@@ -4,7 +4,7 @@ import BottomPanel from './components/BottomPanel';
 import Toolbar from './components/Toolbar';
 import PropertiesPanel from './components/PropertiesPanel';
 import CanvasComponent from './components/CanvasComponent';
-import { ToolType, Shape, ShapeStyle, DEFAULT_STYLE } from './types/shapes';
+import { ToolType, Shape, ShapeStyle, DEFAULT_STYLE, ImageShape } from './types/shapes';
 
 interface RemoteCursor {
   userId: string;
@@ -284,6 +284,46 @@ function WhiteboardRoom() {
         }
       }
 
+      // 'I' for image insert
+      if (!e.ctrlKey && !e.metaKey && e.key === 'i') {
+        e.preventDefault();
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (ev) => {
+          const file = (ev.target as HTMLInputElement).files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            if (evt.target?.result && typeof evt.target.result === 'string') {
+              const img = new Image();
+              img.onload = () => {
+                const defaultWidth = 200;
+                const aspectRatio = img.height / img.width;
+                const newShape: ImageShape = {
+                  id: Math.random().toString(36).substring(2, 9),
+                  type: 'image',
+                  x: -panX / scale + 50,
+                  y: -panY / scale + 50,
+                  width: defaultWidth,
+                  height: defaultWidth * aspectRatio,
+                  src: evt.target!.result as string,
+                  style: { ...defaultStyle },
+                };
+                setForwardHistory([]);
+                setHistory((prev) => [...prev, shapes]);
+                onShapesChange([...shapes, newShape]);
+                setSelectedIds([newShape.id]);
+              };
+              img.src = evt.target.result as string;
+            }
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+        return;
+      }
+
       // Ctrl+Y redo
       if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -304,6 +344,7 @@ function WhiteboardRoom() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forwardHistory, history, shapes]);
 
   // Broadcast cursor position to other users (throttled to ~30fps)
@@ -344,9 +385,33 @@ function WhiteboardRoom() {
     }
   }, [shapes, history, onShapesChange]);
 
+  // Insert image from data URL
+  const handleImageInsert = (dataUrl: string) => {
+    const img = new Image();
+    img.onload = () => {
+      const defaultWidth = 200;
+      const aspectRatio = img.height / img.width;
+      const newShape: ImageShape = {
+        id: Math.random().toString(36).substring(2, 9),
+        type: 'image',
+        x: -panX / scale + 50,
+        y: -panY / scale + 50,
+        width: defaultWidth,
+        height: defaultWidth * aspectRatio,
+        src: dataUrl,
+        style: { ...defaultStyle },
+      };
+      setForwardHistory([]);
+      setHistory([...history, shapes]);
+      onShapesChange([...shapes, newShape]);
+      setSelectedIds([newShape.id]);
+    };
+    img.src = dataUrl;
+  };
+
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onClearCanvas={clearCanvas} />
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
       <PropertiesPanel style={panelStyle} onStyleChange={handleStyleChange} />
       <CanvasComponent
         activeTool={activeTool}
