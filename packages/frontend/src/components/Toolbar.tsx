@@ -8,6 +8,7 @@ const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] =
   { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O' },
   { id: 'rhombus', label: 'Rhombus', icon: '◇', shortcut: 'D' },
   { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
+  { id: 'arrow', label: 'Arrow', icon: '→', shortcut: 'A' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
   { id: 'eraser', label: 'Eraser', icon: '◻', shortcut: 'X' },
 ];

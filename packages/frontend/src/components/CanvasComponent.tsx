@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape } from '../types/shapes';
+import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape, ArrowShape } from '../types/shapes';
 import { theme } from '../theme';
 
 interface CanvasComponentProps {
@@ -186,7 +186,7 @@ export default function CanvasComponent({
         height: Math.max(...ys) - Math.min(...ys),
       };
     }
-    if (shape.type === 'line') {
+    if (shape.type === 'line' || shape.type === 'arrow') {
       return {
         x: Math.min(shape.startX, shape.endX),
         y: Math.min(shape.startY, shape.endY),
@@ -290,6 +290,29 @@ export default function CanvasComponent({
         strokeWidth: style.strokeWidth,
         strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       });
+    } else if (shape.type === 'arrow') {
+      rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], {
+        stroke: style.strokeColor,
+        strokeWidth: style.strokeWidth,
+        strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
+      });
+      // Draw arrowhead triangle at end point
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx) {
+        const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
+        const arrowheadSize = style.strokeWidth * 3;
+        ctx.save();
+        ctx.fillStyle = style.strokeColor;
+        ctx.translate(shape.endX, shape.endY);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-arrowheadSize, -arrowheadSize / 2);
+        ctx.lineTo(-arrowheadSize, arrowheadSize / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     } else if (shape.type === 'text') {
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx && shape.content) {
@@ -769,7 +792,7 @@ export default function CanvasComponent({
       };
     }
 
-    if (shape.type === 'line') {
+    if (shape.type === 'line' || shape.type === 'arrow') {
       const origBounds = getShapeBounds(shape);
       const offsetX = x - origBounds.x;
       const offsetY = y - origBounds.y;
@@ -779,7 +802,7 @@ export default function CanvasComponent({
         startY: shape.startY + offsetY,
         endX: shape.endX + offsetX,
         endY: shape.endY + offsetY,
-      } as LineShape;
+      } as LineShape | ArrowShape;
     }
 
     return { ...shape, x, y, width, height };
@@ -923,6 +946,32 @@ export default function CanvasComponent({
               strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
             },
           );
+        } else if (activeTool === 'arrow') {
+          rc.linearPath(
+            [[start.x, start.y], [point.x, point.y]],
+            {
+              stroke: defaultStyle.strokeColor,
+              strokeWidth: defaultStyle.strokeWidth,
+              strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
+            },
+          );
+          // Draw arrowhead preview
+          const ctx = canvasRef.current?.getContext('2d');
+          if (ctx) {
+            const angle = Math.atan2(point.y - start.y, point.x - start.x);
+            const arrowheadSize = defaultStyle.strokeWidth * 3;
+            ctx.save();
+            ctx.fillStyle = defaultStyle.strokeColor;
+            ctx.translate(point.x, point.y);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-arrowheadSize, -arrowheadSize / 2);
+            ctx.lineTo(-arrowheadSize, arrowheadSize / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
         }
       }
       return;
@@ -952,14 +1001,14 @@ export default function CanvasComponent({
             points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
           };
         }
-        if (s.type === 'line') {
+        if (s.type === 'line' || s.type === 'arrow') {
           return {
             ...s,
             startX: s.startX + dx,
             startY: s.startY + dy,
             endX: s.endX + dx,
             endY: s.endY + dy,
-          } as LineShape;
+          } as LineShape | ArrowShape;
         }
         return { ...s, x: s.x + dx, y: s.y + dy };
       });
@@ -1137,6 +1186,20 @@ export default function CanvasComponent({
             endY: point.y,
             style: { ...defaultStyle },
           } as LineShape;
+        }
+      } else if (activeTool === 'arrow') {
+        const dx = Math.abs(point.x - start.x);
+        const dy = Math.abs(point.y - start.y);
+        if (dx > 3 || dy > 3) {
+          newShape = {
+            id: generateId(),
+            type: 'arrow',
+            startX: start.x,
+            startY: start.y,
+            endX: point.x,
+            endY: point.y,
+            style: { ...defaultStyle },
+          } as ArrowShape;
         }
       }
 

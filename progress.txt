@@ -274,3 +274,18 @@ Started: Sun Apr 12 16:08:46     2026
   - rc.polygon takes an array of [x, y] coordinate pairs: 4 vertices for rhombus (top center, right center, bottom center, left center)
   - Preview drawing during drag uses the same rc.polygon call with identical vertex calculations
 ---
+
+## [2026-04-12] - v2-redesign-4
+- Implemented arrow shape tool
+- Features: arrow button in toolbar (icon: →, shortcut: A), click-and-drag to draw arrows with arrowhead, supports solid/dashed line styles, select/move/resize like line shapes
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added ArrowShape interface (startX/startY/endX/endY), added 'arrow' to ToolType and Shape union
+  - packages/frontend/src/components/Toolbar.tsx: added arrow tool button with shortcut A
+  - packages/frontend/src/components/CanvasComponent.tsx: added arrow rendering via rc.linearPath + canvas arrowhead triangle (strokeWidth * 3), arrow preview during drag, arrow shape creation on mouseUp, getShapeBounds/applyResize/move logic handle arrow type
+  - packages/frontend/src/App.tsx: added 'a' keyboard shortcut for arrow tool
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - ArrowShape uses the same startX/startY/endX/endY coordinate pattern as LineShape — getShapeBounds, applyResize, and move logic are shared between the two types
+  - Arrowhead rendering uses native canvas (ctx) rather than roughjs — draw a filled triangle rotated to the line angle via ctx.translate + ctx.rotate
+  - Arrowhead size is proportional to strokeWidth * 3 for visual consistency across stroke widths
+---

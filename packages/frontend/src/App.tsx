@@ -269,6 +269,7 @@ function WhiteboardRoom() {
           o: 'ellipse',
           '3': 'ellipse',
           d: 'rhombus',
+          a: 'arrow',
           l: 'line',
           '4': 'line',
           p: 'freehand',
