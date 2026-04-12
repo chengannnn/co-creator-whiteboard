@@ -245,3 +245,17 @@ Started: Sun Apr 12 16:08:46     2026
   - `applyCanvasTransformFromRefs` uses ref values for pan/scale to avoid dependency on React state during panning
   - `moveShapesRef` is cleared to null on mouseUp, falling back to committed `shapes` state
 ---
+
+## [2026-04-12] - v2-redesign-2
+- Fixed canvas jitter during panning (wheel zoom)
+- Changes:
+  - Wheel handler now updates `scaleRef`/`panXRef`/`panYRef` directly and redraws canvas immediately using `applyCanvasTransformFromRefs` — no React state updates during scroll
+  - Added `zoomCommitTimer` to debounce state sync (150ms after scroll pauses)
+  - State is committed via `commitZoomToState` callback only after zoom interaction settles
+  - BottomPanel zoom indicator updates after debounce delay; canvas itself zooms smoothly in real-time
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Both wheel zoom and drag panning must use the same ref-based pattern to avoid jitter — update refs, redraw immediately, defer state sync
+  - `commitZoomToState` is a `useCallback` that depends on `onScaleChange`/`onPanXChange`/`onPanYChange` — these are stable props from App.tsx
+  - The wheel handler's useEffect depends on `shapes`, `selectedIds`, `getBBox`, `getHandlePositions`, `userId`, `shapeOwners`, `applyCanvasTransformFromRefs`, `commitZoomToState` to properly redraw all canvas elements during zoom
+---
