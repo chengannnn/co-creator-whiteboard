@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'freehand';
+export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'freehand' | 'text';
 
 export interface Point {
   x: number;
@@ -44,6 +44,18 @@ export interface FreehandShape {
   style: ShapeStyle;
 }
 
+export interface TextShape {
+  id: string;
+  type: 'text';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  content: string;
+  fontSize: number;
+  style: ShapeStyle;
+}
+
 export const DEFAULT_STYLE: ShapeStyle = {
   strokeColor: '#000000',
   strokeWidth: 2,
@@ -52,4 +64,4 @@ export const DEFAULT_STYLE: ShapeStyle = {
   fillColor: '#000000',
 };
 
-export type Shape = RectangleShape | EllipseShape | FreehandShape;
+export type Shape = RectangleShape | EllipseShape | FreehandShape | TextShape;

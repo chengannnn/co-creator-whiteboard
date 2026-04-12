@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE } from '../types/shapes';
+import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape } from '../types/shapes';
 
 interface CanvasComponentProps {
   activeTool: ToolType;
@@ -59,6 +59,16 @@ export default function CanvasComponent({
     height: 0,
   });
 
+  // Inline text editing state
+  const [editingText, setEditingText] = useState<{
+    shapeId: string;
+    x: number;
+    y: number;
+    content: string;
+    fontSize: number;
+  } | null>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
+
   const pushHistory = useCallback(
     (newShapes: Shape[]) => {
       onHistoryChange([...history, shapes]);
@@ -87,6 +97,21 @@ export default function CanvasComponent({
         width: Math.max(...xs) - Math.min(...xs),
         height: Math.max(...ys) - Math.min(...ys),
       };
+    }
+    // Text shapes: measure content if width is 0 (newly created)
+    if (shape.type === 'text' && shape.width === 0 && shape.height === 0) {
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx && shape.content) {
+        ctx.font = `${shape.fontSize}px sans-serif`;
+        const metrics = ctx.measureText(shape.content);
+        return {
+          x: shape.x,
+          y: shape.y,
+          width: Math.ceil(metrics.width),
+          height: shape.fontSize,
+        };
+      }
+      return { x: shape.x, y: shape.y, width: 100, height: shape.fontSize };
     }
     return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
   };
@@ -148,6 +173,23 @@ export default function CanvasComponent({
           strokeWidth: style.strokeWidth,
           strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
         });
+      }
+    } else if (shape.type === 'text') {
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx && shape.content) {
+        ctx.font = `${shape.fontSize}px sans-serif`;
+        ctx.fillStyle = style.strokeColor;
+        ctx.textBaseline = 'top';
+        ctx.fillText(shape.content, shape.x, shape.y);
+
+        // Update shape dimensions based on rendered text
+        const metrics = ctx.measureText(shape.content);
+        const newWidth = Math.ceil(metrics.width);
+        const newHeight = shape.fontSize;
+        if (newWidth !== shape.width || newHeight !== shape.height) {
+          shape.width = newWidth;
+          shape.height = newHeight;
+        }
       }
     }
   };
@@ -244,6 +286,34 @@ export default function CanvasComponent({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedId, shapes, undo, pushHistory, onSelectedIdChange]);
 
+  // Focus text input when editing starts
+  useEffect(() => {
+    if (editingText && textInputRef.current) {
+      textInputRef.current.focus();
+    }
+  }, [editingText]);
+
+  // Keyboard handling for text editing
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!editingText) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        finishEditing();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEditing();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingText, shapes]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
   // --- Shape hit detection ---
 
   const hitTestShapes = (point: Point): Shape | null => {
@@ -264,8 +334,7 @@ export default function CanvasComponent({
         ) {
           return shape;
         }
-      }
-    }
+      }    }
     return null;
   };
 
@@ -317,6 +386,42 @@ export default function CanvasComponent({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
+  };
+
+  const finishEditing = () => {
+    if (!editingText) return;
+    const { shapeId, content } = editingText;
+    if (content.trim()) {
+      const ctx = canvasRef.current?.getContext('2d');
+      let width = 100;
+      let height = 20;
+      if (ctx) {
+        ctx.font = `${editingText.fontSize}px sans-serif`;
+        const metrics = ctx.measureText(content);
+        width = Math.ceil(metrics.width);
+        height = editingText.fontSize;
+      }
+      onShapesChange(
+        shapes.map((s) =>
+          s.id === shapeId
+            ? { ...s, content: content.trim(), width, height }
+            : s
+        )
+      );
+    } else {
+      // Remove empty text shapes
+      pushHistory(shapes.filter((s) => s.id !== shapeId));
+    }
+    setEditingText(null);
+  };
+
+  const cancelEditing = () => {
+    if (!editingText) return;
+    // Remove the text shape if content is empty
+    if (!editingText.content.trim()) {
+      pushHistory(shapes.filter((s) => s.id !== editingText.shapeId));
+    }
+    setEditingText(null);
   };
 
   const applyResize = (
@@ -391,7 +496,29 @@ export default function CanvasComponent({
   // --- Mouse handlers ---
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // If currently editing text, don't process other mouse events
+    if (editingText) return;
+
     const point = getCanvasPoint(e);
+
+    if (activeTool === 'text') {
+      // Create a new text shape and start inline editing
+      const id = generateId();
+      const newShape: TextShape = {
+        id,
+        type: 'text',
+        x: point.x,
+        y: point.y,
+        width: 0,
+        height: 20,
+        content: '',
+        fontSize: 20,
+        style: { ...defaultStyle },
+      };
+      pushHistory([...shapes, newShape]);
+      setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20 });
+      return;
+    }
 
     if (activeTool !== 'select') {
       // Drawing mode
@@ -586,6 +713,24 @@ export default function CanvasComponent({
     }
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (editingText) return;
+
+    const point = getCanvasPoint(e);
+    const hitShape = hitTestShapes(point);
+
+    if (hitShape?.type === 'text') {
+      const textShape = hitShape as TextShape;
+      setEditingText({
+        shapeId: textShape.id,
+        x: textShape.x,
+        y: textShape.y,
+        content: textShape.content,
+        fontSize: textShape.fontSize,
+      });
+    }
+  };
+
   const cursorStyle =
     interactionMode === 'moving'
       ? 'move'
@@ -593,21 +738,63 @@ export default function CanvasComponent({
         ? 'crosshair'
         : activeTool === 'select'
           ? 'default'
-          : 'crosshair';
+          : activeTool === 'text'
+            ? 'text'
+            : 'crosshair';
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        display: 'block',
-        width: '100vw',
-        height: '100vh',
-        cursor: cursorStyle,
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          width: '100vw',
+          height: '100vh',
+          cursor: cursorStyle,
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
+      />
+      {editingText && (
+        <textarea
+          ref={textInputRef}
+          value={editingText.content}
+          onChange={(e) =>
+            setEditingText((prev) => (prev ? { ...prev, content: e.target.value } : prev))
+          }
+          onBlur={finishEditing}
+          style={{
+            position: 'fixed',
+            left: editingText.x,
+            top: editingText.y,
+            minWidth: '100px',
+            border: '2px solid #3b82f6',
+            outline: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            fontFamily: 'sans-serif',
+            fontSize: `${editingText.fontSize}px`,
+            color: defaultStyle.strokeColor,
+            padding: '2px 4px',
+            resize: 'none',
+            overflow: 'hidden',
+            zIndex: 100,
+          }}
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              finishEditing();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelEditing();
+            }
+          }}
+        />
+      )}
+    </>
   );
 }
 

@@ -5,6 +5,7 @@ const TOOLS: { id: ToolType; label: string; icon: string }[] = [
   { id: 'rectangle', label: 'Rectangle', icon: '▭' },
   { id: 'ellipse', label: 'Ellipse', icon: '○' },
   { id: 'freehand', label: 'Pencil', icon: '✏' },
+  { id: 'text', label: 'Text', icon: 'T' },
 ];
 
 interface ToolbarProps {
