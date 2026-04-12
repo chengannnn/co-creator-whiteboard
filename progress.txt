@@ -305,3 +305,27 @@ Started: Sun Apr 12 16:08:46     2026
   - ctx.drawImage only works when img.complete && img.naturalWidth > 0 (image fully loaded)
   - Image insertion positions shapes at visible viewport coordinates (-panX/scale + offset) so images appear on screen
 ---
+
+## [2026-04-12] - v2-redesign-6
+- Implemented separate solid and outline shape buttons
+- Changes:
+  - Toolbar: split rectangle/ellipse/rhombus into outline (▭/○/◇) and solid (▮/●/◆) button pairs
+  - Outline buttons set `fillStyle: 'none'` via `onFillStyleChange` callback
+  - Solid buttons set `fillStyle: 'solid'` via `onFillStyleChange` callback
+  - Removed Fill Color selector section from PropertiesPanel
+  - Removed Fill Style (none/solid/hatch) selector section from PropertiesPanel
+  - Added `-solid` variants to ToolType union type
+  - CanvasComponent uses `getBaseShapeTool()` helper to map solid tool variants to base shape type for drawing/hit-testing logic
+  - Shape creation uses `defaultStyle.fillStyle` which is set by toolbar button clicks
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: extended ToolType with 'rectangle-solid', 'ellipse-solid', 'rhombus-solid'
+  - packages/frontend/src/components/Toolbar.tsx: added outline/solid button pairs with fillStyle prop, onFillStyleChange callback
+  - packages/frontend/src/components/PropertiesPanel.tsx: removed Fill Color and Fill Style sections, removed FILL_PRESETS
+  - packages/frontend/src/components/CanvasComponent.tsx: added getBaseShapeTool() helper, updated shape creation/preview checks
+  - packages/frontend/src/App.tsx: added handleFillStyleChange, passed to Toolbar
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Shape tool variants (`-solid`) map to base types for canvas drawing logic — the fillStyle difference is handled through `defaultStyle` rather than branching on tool type in drawShape
+  - Removing UI sections from PropertiesPanel (Fill Color, Fill Style) simplifies the panel by ~140 lines of code
+  - `getBaseShapeTool()` helper is a clean way to extend ToolType without duplicating drawing/hit-testing logic for each variant
+---
