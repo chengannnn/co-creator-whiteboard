@@ -350,3 +350,41 @@ Started: Sun Apr 12 16:08:46     2026
   - Color swatches use circular borders (borderRadius: '50%') to distinguish from the square ones in PropertiesPanel
 
 ---
+
+## [2026-04-12] - v2-redesign-8
+- Implemented pixel-based eraser using globalCompositeOperation = 'destination-out'
+- Eraser no longer deletes entire shapes — erases only pixels within eraser stroke path
+- Eraser has adjustable radius (default 20px, adjustable via width/size control in PropertiesPanel)
+- Eraser path is smooth with interpolation between consecutive points
+- Erase effect visible in real time during mouse drag
+- Eraser cursor indicator shows circle with current radius
+- Shapes data is not modified by pixel erase (MVP scope)
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: added eraserPoints/lastEraserPoint/mousePos refs, replaced shape deletion with pixel erase using destination-out compositing, added eraser cursor indicator overlay
+  - packages/frontend/src/components/PropertiesPanel.tsx: added activeTool/eraserRadius/onEraserRadiusChange props, shows "Size" label with circle icons when eraser is active, maps strokeWidth values (1,2,4) to eraser radii (10px, 20px, 40px)
+  - packages/frontend/src/App.tsx: added eraserRadius state, passed to PropertiesPanel and CanvasComponent
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - `globalCompositeOperation = 'destination-out'` erases pixels by making them transparent — works after shapes are drawn, so erased areas show the canvas background
+  - Eraser rendering uses both circle fills at each point AND a stroked line connecting all points for smooth continuous erase without gaps
+  - Interpolation step size is `eraserRadius / 3` — ensures no gaps between erase circles even at high mouse speeds
+  - `redrawCanvas` useCallback now depends on `eraserRadius` — changing eraser size triggers full redraw to update both erased pixels and cursor indicator
+  - PropertiesPanel conditionally adapts its width control to show eraser size when eraser tool is active
+
+---
+
+## [2026-04-12] - v2-redesign-9
+- Implemented unified two-row toolbar merging Toolbar + PropertiesPanel
+- Changes:
+  - Deleted Toolbar.tsx and PropertiesPanel.tsx components
+  - Created UnifiedToolbar.tsx with two rows: Row 1 (tools) + Row 2 (colors — width — style)
+  - Row 2 layout: 10 color buttons + custom picker | divider | width selector (3 options) | divider | line style (solid/dashed)
+  - handleStyleChange in App.tsx simplified to accept partial patches ({ strokeWidth?, strokeStyle? })
+  - App.tsx imports updated, JSX replaced single Toolbar + PropertiesPanel with UnifiedToolbar
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - UnifiedToolbar combines all UI controls into one component — no need to coordinate positioning between separate floating panels
+  - Row 2 uses a single flex container with dividers as visual separators between color/width/style sections
+  - Width and style sections use smaller font sizes (9px labels) and tighter gaps to fit within the toolbar footprint
+
+---

@@ -22,6 +22,7 @@ interface CanvasComponentProps {
   onPanXChange: (panX: number) => void;
   onPanYChange: (panY: number) => void;
   onScaleChange: (scale: number) => void;
+  eraserRadius: number;
 }
 
 type InteractionMode =
@@ -88,6 +89,7 @@ export default function CanvasComponent({
   onPanXChange,
   onPanYChange,
   onScaleChange,
+  eraserRadius,
 }: CanvasComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
@@ -129,6 +131,11 @@ export default function CanvasComponent({
 
   // Image cache: src -> HTMLImageElement (avoids reloading images on every redraw)
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Pixel-based eraser state
+  const eraserPoints = useRef<Point[]>([]);
+  const lastEraserPoint = useRef<Point | null>(null);
+  const mousePos = useRef<Point>({ x: 0, y: 0 });
 
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
@@ -396,6 +403,35 @@ export default function CanvasComponent({
       }
     }
 
+    // Pixel-based eraser: use destination-out to erase pixels
+    if (eraserPoints.current.length > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (const pt of eraserPoints.current) {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.fill();
+      }
+
+      // Connect consecutive points with stroked lines for smooth continuous erase
+      if (eraserPoints.current.length > 1) {
+        ctx.lineWidth = eraserRadius * 2;
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+        ctx.beginPath();
+        ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
+        for (let i = 1; i < eraserPoints.current.length; i++) {
+          ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
     // Draw selection bounding boxes
     for (const selId of selectedIds) {
       const shape = activeShapes.find((s) => s.id === selId);
@@ -425,7 +461,7 @@ export default function CanvasComponent({
     }
 
     ctx.restore();
-  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform]);
+  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform, eraserRadius]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -838,14 +874,13 @@ export default function CanvasComponent({
     // If currently editing text, don't process other mouse events
     if (editingText) return;
 
-    // Eraser tool: delete shape on click
+    // Eraser tool: start pixel erase mode (no shape deletion)
     if (activeTool === 'eraser') {
       const point = getCanvasPoint(e);
-      const hitShape = hitTestShapes(point);
-      if (hitShape) {
-        pushHistory(shapes.filter((s) => s.id !== hitShape.id));
-        onSelectedIdsChange(selectedIds.filter((id) => id !== hitShape.id));
-      }
+      isDrawing.current = true;
+      startPoint.current = point;
+      eraserPoints.current = [point];
+      lastEraserPoint.current = point;
       setInteractionMode('drawing');
       return;
     }
@@ -899,15 +934,29 @@ export default function CanvasComponent({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const point = getCanvasPoint(e);
+    mousePos.current = point;
 
     if (interactionMode === 'drawing') {
-      // Eraser: delete shapes under cursor during drag
+      // Eraser: track points for pixel-level erasing
       if (activeTool === 'eraser') {
-        const hitShape = hitTestShapes(point);
-        if (hitShape) {
-          pushHistory(shapes.filter((s) => s.id !== hitShape.id));
-          onSelectedIdsChange(selectedIds.filter((id) => id !== hitShape.id));
+        const prev = lastEraserPoint.current;
+        if (prev) {
+          // Interpolate for smooth continuous erase
+          const dx = point.x - prev.x;
+          const dy = point.y - prev.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const step = Math.max(1, eraserRadius / 3);
+          const numSteps = Math.max(1, Math.ceil(dist / step));
+          for (let i = 1; i <= numSteps; i++) {
+            const t = i / numSteps;
+            eraserPoints.current.push({
+              x: prev.x + dx * t,
+              y: prev.y + dy * t,
+            });
+          }
         }
+        lastEraserPoint.current = point;
+        redrawCanvas();
         return;
       }
 
@@ -1162,6 +1211,13 @@ export default function CanvasComponent({
 
     if (interactionMode === 'drawing') {
       isDrawing.current = false;
+
+      // Eraser: finalize pixel erase (shapes data unchanged in MVP scope)
+      if (activeTool === 'eraser') {
+        setInteractionMode('idle');
+        return;
+      }
+
       const start = startPoint.current;
       let newShape: Shape | null = null;
 
@@ -1381,6 +1437,22 @@ export default function CanvasComponent({
           </div>
         );
       })}
+      {/* Eraser cursor indicator */}
+      {activeTool === 'eraser' && (
+        <div
+          style={{
+            position: 'fixed',
+            left: mousePos.current.x * scale + panX - eraserRadius,
+            top: mousePos.current.y * scale + panY - eraserRadius,
+            width: eraserRadius * 2,
+            height: eraserRadius * 2,
+            borderRadius: '50%',
+            border: '2px solid rgba(0,0,0,0.5)',
+            pointerEvents: 'none',
+            zIndex: 1000,
+          }}
+        />
+      )}
       {editingText && (
         <textarea
           ref={textInputRef}

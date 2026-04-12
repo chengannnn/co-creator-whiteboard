@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import BottomPanel from './components/BottomPanel';
-import Toolbar from './components/Toolbar';
-import PropertiesPanel from './components/PropertiesPanel';
+import UnifiedToolbar from './components/UnifiedToolbar';
 import CanvasComponent from './components/CanvasComponent';
-import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape } from './types/shapes';
+import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape, StrokeWidth, StrokeStyle } from './types/shapes';
 
 interface RemoteCursor {
   userId: string;
@@ -48,6 +47,9 @@ function WhiteboardRoom() {
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [scale, setScale] = useState(1);
+
+  // Eraser radius (default 20px)
+  const [eraserRadius, setEraserRadius] = useState(20);
 
   const wsRef = useRef<WebSocket | null>(null);
   const shapesRef = useRef<Shape[]>([]);
@@ -238,14 +240,19 @@ function WhiteboardRoom() {
     [sendShapeMutation]
   );
 
-  // Properties panel: update selected shapes or set defaults for new shapes
-  const handleStyleChange = (style: ShapeStyle) => {
-    setDefaultStyle(style);
-    if (selectedIds.length > 0) {
-      onShapesChange((prev) =>
-        prev.map((s) => (selectedIds.includes(s.id) ? { ...s, style } : s))
-      );
-    }
+  // Unified toolbar: update selected shapes or set defaults for new shapes
+  const handleStyleChange = (patch: { strokeWidth?: StrokeWidth; strokeStyle?: StrokeStyle }) => {
+    setDefaultStyle((prev) => {
+      const next = { ...prev, ...patch };
+      if (selectedIds.length > 0) {
+        onShapesChange((prevShapes) =>
+          prevShapes.map((s) =>
+            selectedIds.includes(s.id) ? { ...s, style: { ...s.style, ...patch } } : s
+          )
+        );
+      }
+      return next;
+    });
   };
 
   // Toolbar: set fillStyle when clicking outline/solid shape buttons
@@ -268,10 +275,11 @@ function WhiteboardRoom() {
     }
   };
 
-  // Determine which style to show in properties panel (selected shape or defaults)
-  const panelStyle = (() => {
+  // Determine toolbar style state (selected shape or defaults)
+  const toolbarStyle = (() => {
     const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
-    return selectedShape ? selectedShape.style : defaultStyle;
+    const s = selectedShape ? selectedShape.style : defaultStyle;
+    return { strokeWidth: s.strokeWidth, strokeStyle: s.strokeStyle };
   })();
 
   // Sync unifiedColor when selecting existing shapes
@@ -442,8 +450,19 @@ function WhiteboardRoom() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onFillStyleChange={handleFillStyleChange} onColorChange={handleColorChange} unifiedColor={unifiedColor} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
-      <PropertiesPanel style={panelStyle} onStyleChange={handleStyleChange} />
+      <UnifiedToolbar
+        activeTool={activeTool}
+        onToolChange={setActiveTool}
+        onFillStyleChange={handleFillStyleChange}
+        onColorChange={handleColorChange}
+        unifiedColor={unifiedColor}
+        onClearCanvas={clearCanvas}
+        onImageInsert={handleImageInsert}
+        style={toolbarStyle}
+        onStyleChange={handleStyleChange}
+        eraserRadius={eraserRadius}
+        onEraserRadiusChange={setEraserRadius}
+      />
       <CanvasComponent
         activeTool={activeTool}
         shapes={shapes}
@@ -463,6 +482,7 @@ function WhiteboardRoom() {
         onPanXChange={setPanX}
         onPanYChange={setPanY}
         onScaleChange={setScale}
+        eraserRadius={eraserRadius}
       />
       <BottomPanel
         roomId={roomId ?? 'unknown'}
