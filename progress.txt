@@ -100,3 +100,19 @@
   - Room cleanup uses setTimeout that gets cancelled when a new user joins; empty rooms trigger the timer
   - Vite proxies `/ws` to the backend automatically during dev, so frontend connects to same origin
 ---
+
+## [2026-04-12] - story-7
+- Implemented real-time shape sync via WebSocket
+- Features: shape create/update/delete broadcast, full state sync on join, reconnect with exponential backoff, shape attribution with colored borders
+- Files changed:
+  - packages/backend/src/index.ts: added roomShapes state, broadcastToRoom/sendFullState helpers, shape_create/shape_update/shape_delete/request_sync message handling, user identity assignment (color+name)
+  - packages/frontend/src/App.tsx: added WebSocket shape sync (diff-based mutation detection), shape ownership tracking (Map<shapeId, userId>), reconnect logic with backoff, remote cursor state, user identity from server
+  - packages/frontend/src/components/CanvasComponent.tsx: added colored border rendering on remote shapes, remote cursor rendering (pointer SVG + name label), cursor position broadcasting on mouse move
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Shape sync uses diff-based detection (compare length for create/delete, reference comparison for updates) to minimize WebSocket traffic
+  - `isRemoteUpdate` ref flag prevents echo loops when receiving shape mutations from the server
+  - Reconnect uses exponential backoff (500ms base, 5000ms max) to avoid hammering the server
+  - Shape ownership tracked client-side via Map<shapeId, userId>; synced shapes on reconnect are marked as '__remote__' since server doesn't persist ownership
+  - userId is `${color}-${name}` format from server-assigned identity; colored borders extract the color by splitting on '-'
+---

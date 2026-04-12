@@ -42,14 +42,19 @@ function WhiteboardRoom() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const shapesRef = useRef<Shape[]>([]);
+  const userIdRef = useRef<string | null>(null);
   const isRemoteUpdate = useRef(false);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep shapesRef in sync
+  // Keep refs in sync
   useEffect(() => {
     shapesRef.current = shapes;
   }, [shapes]);
+
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   // Send shape mutation over WebSocket
   const sendShapeMutation = useCallback((type: string, data: { shape?: Shape; shapeId?: string }) => {
@@ -117,7 +122,7 @@ function WhiteboardRoom() {
               next.delete(msg.shapeId);
               return next;
             });
-          } else if (msg.type === 'cursor_position' && msg.userId !== userId) {
+          } else if (msg.type === 'cursor_position' && msg.userId !== userIdRef.current) {
             setRemoteCursors((prev) => {
               const next = new Map(prev);
               next.set(msg.userId, {
@@ -162,7 +167,7 @@ function WhiteboardRoom() {
         wsRef.current.close();
       }
     };
-  }, [roomId, userId]);
+  }, [roomId]);
 
   // Wrap onShapesChange to also broadcast mutations
   const onShapesChange = useCallback(
@@ -183,7 +188,7 @@ function WhiteboardRoom() {
           sendShapeMutation('shape_create', { shape: newShape });
           setShapeOwners((prev) => {
             const next = new Map(prev);
-            next.set(newShape.id, userId ?? '__local__');
+            next.set(newShape.id, userIdRef.current ?? '__local__');
             return next;
           });
         }
@@ -208,7 +213,7 @@ function WhiteboardRoom() {
 
       setShapes(nextShapes);
     },
-    [sendShapeMutation, userId]
+    [sendShapeMutation]
   );
 
   const selectedShape = shapes.find((s) => s.id === selectedId) ?? null;
@@ -227,11 +232,11 @@ function WhiteboardRoom() {
     const now = Date.now();
     if (now - lastCursorBroadcast.current < CURSOR_BROADCAST_THROTTLE) return;
     lastCursorBroadcast.current = now;
-    if (wsRef.current?.readyState === WebSocket.OPEN && userId) {
+    if (wsRef.current?.readyState === WebSocket.OPEN && userIdRef.current) {
       wsRef.current.send(
         JSON.stringify({
           type: 'cursor_position',
-          userId,
+          userId: userIdRef.current,
           x,
           y,
           color: userColor,
@@ -239,7 +244,7 @@ function WhiteboardRoom() {
         })
       );
     }
-  }, [userId, userColor, userName]);
+  }, [userColor, userName]);
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>

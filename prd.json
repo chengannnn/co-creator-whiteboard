@@ -106,7 +106,7 @@
       "title": "Real-Time Shape Sync",
       "description": "Broadcast shape create/update/delete events to all users in the room via WebSocket. Handle disconnect/reconnect gracefully.",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Shape changes appear on all users' canvases within 200ms",
         "WebSocket connects on room join, sends full canvas state",
