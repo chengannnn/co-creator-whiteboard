@@ -289,3 +289,19 @@ Started: Sun Apr 12 16:08:46     2026
   - Arrowhead rendering uses native canvas (ctx) rather than roughjs — draw a filled triangle rotated to the line angle via ctx.translate + ctx.rotate
   - Arrowhead size is proportional to strokeWidth * 3 for visual consistency across stroke widths
 ---
+
+## [2026-04-12] - v2-redesign-5
+- Implemented image insert feature
+- Features: image button in toolbar (icon: 🖼, shortcut: I), file picker opens on click/keypress, selected image converted to Data URL, image added as shape with default width 200px maintaining aspect ratio, image supports select/move/resize like rectangle/ellipse
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added ImageShape interface (x/y/width/height/src), added 'image' to Shape union
+  - packages/frontend/src/components/Toolbar.tsx: added image button with file picker, removed minimize toggle, added onImageInsert callback prop
+  - packages/frontend/src/components/CanvasComponent.tsx: added image rendering via ctx.drawImage with image cache ref to avoid reloading, added imageCacheRef for performance
+  - packages/frontend/src/App.tsx: added handleImageInsert function, 'i' keyboard shortcut triggers file picker, image positioned at visible canvas coordinates
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - ImageShape uses x/y/width/height like RectangleShape — existing getShapeBounds, applyResize, and move logic work automatically without modification
+  - Images should be cached (Map<src, HTMLImageElement>) to avoid reloading on every canvas redraw
+  - ctx.drawImage only works when img.complete && img.naturalWidth > 0 (image fully loaded)
+  - Image insertion positions shapes at visible viewport coordinates (-panX/scale + offset) so images appear on screen
+---
