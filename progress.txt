@@ -1,3 +1,7 @@
+# Ralph Progress Log
+Started: Sun Apr 12 16:08:46     2026
+---
+
 ## Codebase Patterns
 - Monorepo uses npm workspaces with packages/frontend and packages/backend
 - Backend uses ESM modules (`"type": "module"`) with tsx for development
@@ -142,4 +146,19 @@
   - Native wheel event listener with { passive: false } is required because React synthetic events cannot prevent the browser's default zoom behavior
   - Overlay elements (text editor, remote cursors) use position:fixed with screen coordinates, must convert world coordinates via (worldX * scale + panX) for correct positioning
   - Handle sizes, line widths, and dash patterns must be divided by scale to appear at consistent visual sizes across zoom levels
+---
+
+## [2026-04-12] - v2-story-1
+- Implemented Excalidraw-style layout redesign
+- Files changed:
+  - packages/frontend/src/components/Toolbar.tsx: rewritten as top-centered floating toolbar with minimize toggle, semi-transparent background, rounded corners, shadow, shortcut labels on buttons
+  - packages/frontend/src/components/BottomPanel.tsx: new bottom-right floating panel with room ID, share button, user count, connection status, and zoom level
+  - packages/frontend/src/App.tsx: removed RoomHeader and PropertiesPanel imports, added BottomPanel with scale prop
+  - packages/frontend/src/components/CanvasComponent.tsx: removed duplicate zoom indicator (now in BottomPanel)
+  - prd.json: set v2-story-1 passes to true
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Floating toolbar uses `onMouseDown={(e) => e.stopPropagation()}` to prevent canvas interactions when clicking the toolbar
+  - `setDefaultStyle` and `handleStyleChange` commented out in App.tsx (will be re-enabled for v2-story-5)
+  - Canvas component canvas spans 100vw/100vh — floating UI elements use position:fixed on top
 ---
