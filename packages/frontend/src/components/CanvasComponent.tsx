@@ -45,6 +45,14 @@ type ResizeHandle =
 const HANDLE_SIZE = 8;
 const BBOX_PADDING = 6;
 
+// Map solid tool variants to base shape types for drawing/hit-testing logic
+const getBaseShapeTool = (tool: ToolType): ToolType => {
+  if (tool === 'rectangle-solid') return 'rectangle';
+  if (tool === 'ellipse-solid') return 'ellipse';
+  if (tool === 'rhombus-solid') return 'rhombus';
+  return tool;
+};
+
 // Map hex colors to readable names for cursor labels (must match App.tsx mapping)
 const HEX_TO_COLOR_NAME: Record<string, string> = {
   '#ef4444': 'Red',
@@ -926,17 +934,18 @@ export default function CanvasComponent({
         const width = Math.abs(point.x - start.x);
         const height = Math.abs(point.y - start.y);
 
-        if (activeTool === 'rectangle') {
+        const baseTool = getBaseShapeTool(activeTool);
+        if (baseTool === 'rectangle') {
           rc.rectangle(x, y, width, height, {
             stroke: defaultStyle.strokeColor,
             strokeWidth: defaultStyle.strokeWidth,
           });
-        } else if (activeTool === 'ellipse') {
+        } else if (baseTool === 'ellipse') {
           rc.ellipse(x + width / 2, y + height / 2, width, height, {
             stroke: defaultStyle.strokeColor,
             strokeWidth: defaultStyle.strokeWidth,
           });
-        } else if (activeTool === 'rhombus') {
+        } else if (baseTool === 'rhombus') {
           const cx = x + width / 2;
           const cy = y + height / 2;
           const hw = width / 2;
@@ -953,7 +962,7 @@ export default function CanvasComponent({
               strokeWidth: defaultStyle.strokeWidth,
             },
           );
-        } else if (activeTool === 'line') {
+        } else if (baseTool === 'line') {
           rc.linearPath(
             [[start.x, start.y], [point.x, point.y]],
             {
@@ -962,7 +971,7 @@ export default function CanvasComponent({
               strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
             },
           );
-        } else if (activeTool === 'arrow') {
+        } else if (baseTool === 'arrow') {
           rc.linearPath(
             [[start.x, start.y], [point.x, point.y]],
             {
@@ -1156,7 +1165,9 @@ export default function CanvasComponent({
       const start = startPoint.current;
       let newShape: Shape | null = null;
 
-      if (activeTool === 'rectangle') {
+      const baseTool = getBaseShapeTool(activeTool);
+
+      if (baseTool === 'rectangle') {
         const x = Math.min(start.x, point.x);
         const y = Math.min(start.y, point.y);
         const width = Math.abs(point.x - start.x);
@@ -1164,7 +1175,7 @@ export default function CanvasComponent({
         if (width > 3 && height > 3) {
           newShape = { id: generateId(), type: 'rectangle', x, y, width, height, style: { ...defaultStyle } };
         }
-      } else if (activeTool === 'ellipse') {
+      } else if (baseTool === 'ellipse') {
         const x = Math.min(start.x, point.x);
         const y = Math.min(start.y, point.y);
         const width = Math.abs(point.x - start.x);
@@ -1172,7 +1183,7 @@ export default function CanvasComponent({
         if (width > 3 && height > 3) {
           newShape = { id: generateId(), type: 'ellipse', x, y, width, height, style: { ...defaultStyle } };
         }
-      } else if (activeTool === 'rhombus') {
+      } else if (baseTool === 'rhombus') {
         const x = Math.min(start.x, point.x);
         const y = Math.min(start.y, point.y);
         const width = Math.abs(point.x - start.x);

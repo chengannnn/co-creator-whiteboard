@@ -1,11 +1,22 @@
-import { ToolType } from '../types/shapes';
+import { ToolType, FillStyle } from '../types/shapes';
 import { theme } from '../theme';
 
-const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] = [
+type ShapeTool = {
+  id: ToolType;
+  label: string;
+  icon: string;
+  shortcut: string;
+  fillStyle?: FillStyle;
+};
+
+const TOOLS: ShapeTool[] = [
   { id: 'select', label: 'Select', icon: '◇', shortcut: 'V' },
-  { id: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R' },
-  { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O' },
-  { id: 'rhombus', label: 'Rhombus', icon: '◇', shortcut: 'D' },
+  { id: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R', fillStyle: 'none' },
+  { id: 'rectangle-solid', label: 'Rectangle', icon: '▮', shortcut: 'R', fillStyle: 'solid' },
+  { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O', fillStyle: 'none' },
+  { id: 'ellipse-solid', label: 'Ellipse', icon: '●', shortcut: 'O', fillStyle: 'solid' },
+  { id: 'rhombus', label: 'Rhombus', icon: '◇', shortcut: 'D', fillStyle: 'none' },
+  { id: 'rhombus-solid', label: 'Rhombus', icon: '◆', shortcut: 'D', fillStyle: 'solid' },
   { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
   { id: 'arrow', label: 'Arrow', icon: '→', shortcut: 'A' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
@@ -15,11 +26,12 @@ const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] =
 interface ToolbarProps {
   activeTool: ToolType;
   onToolChange: (tool: ToolType) => void;
+  onFillStyleChange?: (fill: FillStyle) => void;
   onClearCanvas?: () => void;
   onImageInsert?: (dataUrl: string) => void;
 }
 
-export default function Toolbar({ activeTool, onToolChange, onClearCanvas, onImageInsert }: ToolbarProps) {
+export default function Toolbar({ activeTool, onToolChange, onFillStyleChange, onClearCanvas, onImageInsert }: ToolbarProps) {
   const handleImageClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -64,6 +76,9 @@ export default function Toolbar({ activeTool, onToolChange, onClearCanvas, onIma
           title={`${tool.label} (${tool.shortcut})`}
           onClick={(e) => {
             e.stopPropagation();
+            if (tool.fillStyle !== undefined) {
+              onFillStyleChange?.(tool.fillStyle);
+            }
             onToolChange(tool.id);
           }}
           style={{

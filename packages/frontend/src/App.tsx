@@ -4,7 +4,7 @@ import BottomPanel from './components/BottomPanel';
 import Toolbar from './components/Toolbar';
 import PropertiesPanel from './components/PropertiesPanel';
 import CanvasComponent from './components/CanvasComponent';
-import { ToolType, Shape, ShapeStyle, DEFAULT_STYLE, ImageShape } from './types/shapes';
+import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape } from './types/shapes';
 
 interface RemoteCursor {
   userId: string;
@@ -247,6 +247,11 @@ function WhiteboardRoom() {
     }
   };
 
+  // Toolbar: set fillStyle when clicking outline/solid shape buttons
+  const handleFillStyleChange = (fill: FillStyle) => {
+    setDefaultStyle((prev) => ({ ...prev, fillStyle: fill }));
+  };
+
   // Determine which style to show in properties panel (selected shape or defaults)
   const panelStyle = (() => {
     const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
@@ -411,7 +416,7 @@ function WhiteboardRoom() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onFillStyleChange={handleFillStyleChange} onClearCanvas={clearCanvas} onImageInsert={handleImageInsert} />
       <PropertiesPanel style={panelStyle} onStyleChange={handleStyleChange} />
       <CanvasComponent
         activeTool={activeTool}
