@@ -897,7 +897,12 @@ export default function CanvasComponent({
     const point = getCanvasPoint(e);
     const hitShape = hitTestShapes(point);
 
-    if (hitShape.type === 'text') {
+    if (!hitShape) {
+      // Double-click on empty canvas resets zoom to 100%
+      onScaleChange(1);
+      onPanXChange(0);
+      onPanYChange(0);
+    } else if (hitShape.type === 'text') {
       const textShape = hitShape as TextShape;
       setEditingText({
         shapeId: textShape.id,
@@ -906,11 +911,6 @@ export default function CanvasComponent({
         content: textShape.content,
         fontSize: textShape.fontSize,
       });
-    } else if (!hitShape) {
-      // Double-click on empty canvas resets zoom to 100%
-      onScaleChange(1);
-      onPanXChange(0);
-      onPanYChange(0);
     }
   };
 

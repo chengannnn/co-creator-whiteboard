@@ -131,14 +131,15 @@
 ---
 
 ## [2026-04-12] - story-9
-- Implemented canvas pan and zoom with CSS transform approach
+- Implemented canvas pan and zoom with canvas context setTransform
 - Features: mouse wheel zoom centered on cursor (10%-500%), middle-click drag pan, space+drag pan, zoom level indicator in bottom-right corner, double-click on empty canvas resets zoom to 100%, pan/zoom state is per-user (stored in App.tsx state, not shared)
 - Files changed:
   - packages/frontend/src/App.tsx: panX/panY/scale state with setters passed to CanvasComponent
-  - packages/frontend/src/components/CanvasComponent.tsx: screenToWorld coordinate conversion, CSS transform (translate+scale) on canvas container, handleWheel for zoom, space key tracking, panning interaction mode, zoom indicator overlay, double-click reset
+  - packages/frontend/src/components/CanvasComponent.tsx: screenToWorld/worldToScreen coordinate conversion, ctx.setTransform for pan/zoom rendering, native wheel event listener (passive: false), space key tracking, panning interaction mode, zoom indicator overlay, double-click reset, handle/lineWidth scaled by 1/scale for consistent visual size, remote cursor and text overlay positioned with screen coordinates
 - TypeScript strict mode and ESLint pass for both packages
 - **Learnings for future iterations:**
-  - CSS transform on canvas container is cleaner than canvas context transforms for zoom/pan, especially with rough.js which manages its own canvas state
-  - Windows line endings (CRLF) cause string replacement failures in Node.js scripts; normalize to LF before doing text replacements
-  - Pan/zoom state in parent component (App.tsx) allows per-user isolation since each user has their own React state, while CanvasComponent only handles the visual rendering and coordinate conversion
+  - ctx.setTransform is the correct approach for canvas pan/zoom (not CSS transform); rough.js draws in canvas coordinate space so the transform must be applied to the 2D context before drawing
+  - Native wheel event listener with { passive: false } is required because React synthetic events cannot prevent the browser's default zoom behavior
+  - Overlay elements (text editor, remote cursors) use position:fixed with screen coordinates, must convert world coordinates via (worldX * scale + panX) for correct positioning
+  - Handle sizes, line widths, and dash patterns must be divided by scale to appear at consistent visual sizes across zoom levels
 ---
