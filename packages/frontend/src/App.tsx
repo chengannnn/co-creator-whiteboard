@@ -7,6 +7,7 @@ import { ToolType, Shape } from './types/shapes';
 function WhiteboardRoom() {
   const [activeTool, setActiveTool] = useState<ToolType>('rectangle');
   const [shapes, setShapes] = useState<Shape[]>([]);
+  const [history, setHistory] = useState<Shape[][]>([]);
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
@@ -15,6 +16,8 @@ function WhiteboardRoom() {
         activeTool={activeTool}
         shapes={shapes}
         onShapesChange={setShapes}
+        history={history}
+        onHistoryChange={setHistory}
       />
     </div>
   );
