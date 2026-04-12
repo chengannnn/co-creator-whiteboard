@@ -124,7 +124,7 @@ export default function CanvasComponent({
     const opts = {
       stroke: style.strokeColor,
       strokeWidth: style.strokeWidth,
-      strokeDashArray: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
+      strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       fill: style.fillStyle === 'none' ? undefined : style.fillColor,
       fillStyle: style.fillStyle === 'hatch' ? 'cross-hatch' as const : style.fillStyle === 'solid' ? 'solid' as const : undefined,
       hachureAngle: 60,
@@ -146,7 +146,7 @@ export default function CanvasComponent({
         rc.linearPath(shape.points.map((p) => [p.x, p.y]), {
           stroke: style.strokeColor,
           strokeWidth: style.strokeWidth,
-          strokeDashArray: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
+          strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
         });
       }
     }
