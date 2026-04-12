@@ -122,7 +122,7 @@
       "title": "Live Cursor Presence",
       "description": "Show other users' cursors with colored pointers and random names, updated in real-time.",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Each user assigned random color and random name (e.g., Purple Fox)",
         "Other users' cursors rendered as colored pointers with name labels",

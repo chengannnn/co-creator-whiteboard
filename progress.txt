@@ -116,3 +116,16 @@
   - Shape ownership tracked client-side via Map<shapeId, userId>; synced shapes on reconnect are marked as '__remote__' since server doesn't persist ownership
   - userId is `${color}-${name}` format from server-assigned identity; colored borders extract the color by splitting on '-'
 ---
+
+## [2026-04-12] - story-8
+- Implemented live cursor presence with colored pointers and name labels
+- Features: remote cursors with pointer SVG + name label (color + animal, e.g. "Purple Fox"), pencil indicator when drawing, cursor position throttled at ~30fps, cursor_leave on disconnect
+- Files changed:
+  - packages/backend/src/index.ts: cursor_position relay with isDrawing field, cursor_leave broadcast on disconnect
+  - packages/frontend/src/App.tsx: RemoteCursor interface with isDrawing, broadcastCursor includes isDrawing state
+  - packages/frontend/src/components/CanvasComponent.tsx: hex-to-color-name mapping, pencil indicator SVG overlay on remote cursors, broadcasts isDrawing during draw mode
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - TypeScript flow analysis narrows union types after early returns; `interactionMode === 'drawing'` after a drawing early-return is flagged as always-false. Broadcast cursor position inside the drawing block instead
+  - Cursor broadcasting must happen within the drawing mode block (before early return) to capture the `isDrawing: true` state
+---
