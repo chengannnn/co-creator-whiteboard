@@ -11,6 +11,10 @@ interface CanvasComponentProps {
   defaultStyle: ShapeStyle;
   selectedId: string | null;
   onSelectedIdChange: (id: string | null) => void;
+  userId: string | null;
+  shapeOwners: Map<string, string>;
+  remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string }>;
+  broadcastCursor: (x: number, y: number) => void;
 }
 
 type InteractionMode =
@@ -42,6 +46,10 @@ export default function CanvasComponent({
   defaultStyle,
   selectedId,
   onSelectedIdChange,
+  userId,
+  shapeOwners,
+  remoteCursors,
+  broadcastCursor,
 }: CanvasComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
@@ -211,6 +219,21 @@ export default function CanvasComponent({
       drawShape(roughCanvas, shape);
     }
 
+    // Draw colored borders on remote shapes (attribution)
+    for (const shape of shapes) {
+      const ownerId = shapeOwners.get(shape.id);
+      if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
+        const bounds = getShapeBounds(shape);
+        const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
+        ctx.save();
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+        ctx.restore();
+      }
+    }
+
     // Draw selection bounding box
     if (selectedId) {
       const shape = shapes.find((s) => s.id === selectedId);
@@ -218,8 +241,11 @@ export default function CanvasComponent({
       const bbox = getBBox(shape);
       if (!bbox) return;
 
+      // Use owner color for remote shapes, default blue for own shapes
+      const ownerId = shapeOwners.get(shape.id);
+      const isRemote = ownerId && ownerId !== userId;
       ctx.save();
-      ctx.strokeStyle = '#3b82f6';
+      ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 3]);
       ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
@@ -227,7 +253,7 @@ export default function CanvasComponent({
 
       const handles = getHandlePositions(bbox);
       ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#3b82f6';
+      ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
       ctx.lineWidth = 1.5;
 
       for (const pos of Object.values(handles)) {
@@ -237,7 +263,7 @@ export default function CanvasComponent({
 
       ctx.restore();
     }
-  }, [shapes, selectedId, getBBox, getHandlePositions]);
+  }, [shapes, selectedId, getBBox, getHandlePositions, userId, shapeOwners]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -653,6 +679,9 @@ export default function CanvasComponent({
         return;
       }
     }
+
+    // Broadcast cursor position for presence
+    broadcastCursor(point.x, point.y);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -757,6 +786,44 @@ export default function CanvasComponent({
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
       />
+      {Array.from(remoteCursors.values()).map((cursor) => (
+        <div
+          key={cursor.userId}
+          style={{
+            position: 'fixed',
+            left: cursor.x,
+            top: cursor.y,
+            pointerEvents: 'none',
+            zIndex: 1000,
+          }}
+        >
+          <svg width="20" height="24" viewBox="0 0 20 24" style={{ display: 'block' }}>
+            <path
+              d="M2 2 L2 18 L6.5 13.5 L10.5 20 L13 18.5 L9 12.5 L15 12.5 Z"
+              fill={cursor.color}
+              stroke="#ffffff"
+              strokeWidth="1.5"
+            />
+          </svg>
+          <div
+            style={{
+              position: 'absolute',
+              left: 12,
+              top: 8,
+              backgroundColor: cursor.color,
+              color: '#ffffff',
+              padding: '1px 6px',
+              borderRadius: 3,
+              fontSize: 11,
+              fontFamily: 'sans-serif',
+              whiteSpace: 'nowrap',
+              lineHeight: '16px',
+            }}
+          >
+            {cursor.name}
+          </div>
+        </div>
+      ))}
       {editingText && (
         <textarea
           ref={textInputRef}

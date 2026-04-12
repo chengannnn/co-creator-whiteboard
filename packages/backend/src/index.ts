@@ -3,6 +3,13 @@ import { createServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import cors from 'cors';
 
+// Minimal shape type for backend
+interface Shape {
+  id: string;
+  type: string;
+  [key: string]: unknown;
+}
+
 const app = express();
 const server = createServer(app);
 
@@ -15,6 +22,33 @@ app.get('/health', (_req, res) => {
 
 // Room management: roomId -> Set of WebSocket clients
 const rooms = new Map<string, Set<WebSocket>>();
+
+// Room shape state: roomId -> Shape[]
+const roomShapes = new Map<string, Shape[]>();
+
+// User identity per WebSocket: { color, name }
+interface UserIdentity {
+  color: string;
+  name: string;
+}
+const userIdentities = new WeakMap<WebSocket, UserIdentity>();
+
+const USER_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
+  '#14b8a6', '#f43f5e', '#6366f1', '#84cc16',
+];
+
+const USER_NAMES = [
+  'Fox', 'Owl', 'Bear', 'Wolf', 'Hawk', 'Eagle',
+  'Deer', 'Lynx', 'Crane', 'Shark', 'Tiger', 'Panda',
+];
+
+function assignUserIdentity(): UserIdentity {
+  const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+  const name = USER_NAMES[Math.floor(Math.random() * USER_NAMES.length)];
+  return { color, name };
+}
 
 // Track cleanup timers per room
 const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -40,6 +74,22 @@ function broadcastUserCount(roomId: string) {
   }
 }
 
+function broadcastToRoom(roomId: string, message: object, excludeWs?: WebSocket) {
+  const clients = rooms.get(roomId);
+  if (!clients) return;
+  const data = JSON.stringify(message);
+  for (const client of clients) {
+    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  }
+}
+
+function sendFullState(ws: WebSocket, roomId: string) {
+  const shapes = roomShapes.get(roomId) ?? [];
+  ws.send(JSON.stringify({ type: 'sync_state', shapes }));
+}
+
 function scheduleRoomCleanup(roomId: string) {
   // Clear existing timer if any
   const existing = cleanupTimers.get(roomId);
@@ -47,6 +97,7 @@ function scheduleRoomCleanup(roomId: string) {
 
   const timer = setTimeout(() => {
     rooms.delete(roomId);
+    roomShapes.delete(roomId);
     cleanupTimers.delete(roomId);
     console.log(`Room ${roomId} cleaned up after inactivity`);
   }, ROOM_CLEANUP_DELAY_MS);
@@ -67,6 +118,10 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws, req) => {
   let currentRoom: string | null = null;
 
+  // Assign user identity
+  const identity = assignUserIdentity();
+  userIdentities.set(ws, identity);
+
   // Support roomId from query string (preferred)
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
   const queryRoomId = url.searchParams.get('roomId');
@@ -81,6 +136,11 @@ wss.on('connection', (ws, req) => {
 
     const count = rooms.get(queryRoomId)!.size;
     ws.send(JSON.stringify({ type: 'user_count', count }));
+    ws.send(JSON.stringify({ type: 'user_identity', color: identity.color, name: identity.name }));
+
+    // Send full canvas state
+    sendFullState(ws, queryRoomId);
+
     broadcastUserCount(queryRoomId);
     console.log(`Client joined room ${queryRoomId} via URL (${count} users)`);
   }
@@ -114,14 +174,56 @@ wss.on('connection', (ws, req) => {
         }
         rooms.get(roomId)!.add(ws);
 
+        // Send user identity
+        ws.send(JSON.stringify({ type: 'user_identity', color: identity.color, name: identity.name }));
+
         // Send current user count to the joining user
         const count = rooms.get(roomId)!.size;
         ws.send(JSON.stringify({ type: 'user_count', count }));
+
+        // Send full canvas state
+        sendFullState(ws, roomId);
 
         // Broadcast updated count to all users in the room
         broadcastUserCount(roomId);
 
         console.log(`Client joined room ${roomId} (${count} users)`);
+      }
+
+      // Shape mutation messages
+      if (currentRoom && msg.type === 'shape_create') {
+        const shapes = roomShapes.get(currentRoom) ?? [];
+        shapes.push(msg.shape);
+        roomShapes.set(currentRoom, shapes);
+        const identity = userIdentities.get(ws);
+        broadcastToRoom(currentRoom, {
+          type: 'shape_create',
+          shape: msg.shape,
+          userId: identity ? `${identity.color}-${identity.name}` : '__unknown__',
+        }, ws);
+      }
+
+      if (currentRoom && msg.type === 'shape_update') {
+        const shapes = roomShapes.get(currentRoom) ?? [];
+        const idx = shapes.findIndex((s: Shape) => s.id === msg.shape.id);
+        if (idx !== -1) {
+          shapes[idx] = msg.shape;
+          roomShapes.set(currentRoom, shapes);
+          broadcastToRoom(currentRoom, msg, ws);
+        }
+      }
+
+      if (currentRoom && msg.type === 'shape_delete') {
+        const shapes = roomShapes.get(currentRoom) ?? [];
+        const filtered = shapes.filter((s: Shape) => s.id !== msg.shapeId);
+        if (filtered.length !== shapes.length) {
+          roomShapes.set(currentRoom, filtered);
+          broadcastToRoom(currentRoom, msg, ws);
+        }
+      }
+
+      if (currentRoom && msg.type === 'request_sync') {
+        sendFullState(ws, currentRoom);
       }
     } catch {
       console.log('Invalid message:', data.toString());
@@ -135,6 +237,7 @@ wss.on('connection', (ws, req) => {
         clients.delete(ws);
         if (clients.size === 0) {
           rooms.delete(currentRoom);
+          roomShapes.delete(currentRoom);
           scheduleRoomCleanup(currentRoom);
         } else {
           broadcastUserCount(currentRoom);

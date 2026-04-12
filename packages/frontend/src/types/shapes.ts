@@ -25,6 +25,7 @@ export interface RectangleShape {
   width: number;
   height: number;
   style: ShapeStyle;
+  ownerId?: string;
 }
 
 export interface EllipseShape {
@@ -35,6 +36,7 @@ export interface EllipseShape {
   width: number;
   height: number;
   style: ShapeStyle;
+  ownerId?: string;
 }
 
 export interface FreehandShape {
@@ -42,6 +44,7 @@ export interface FreehandShape {
   type: 'freehand';
   points: Point[];
   style: ShapeStyle;
+  ownerId?: string;
 }
 
 export interface TextShape {
@@ -54,6 +57,7 @@ export interface TextShape {
   content: string;
   fontSize: number;
   style: ShapeStyle;
+  ownerId?: string;
 }
 
 export const DEFAULT_STYLE: ShapeStyle = {
