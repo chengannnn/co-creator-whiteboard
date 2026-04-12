@@ -434,13 +434,14 @@ export default function CanvasComponent({
   }, [editingText, shapes]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // --- Wheel handler for zoom ---
+  // --- Wheel handler for zoom (native listener for passive: false) ---
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const canvas = canvasRef.current;
-      if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
@@ -458,9 +459,11 @@ export default function CanvasComponent({
       onScaleChange(newScale);
       onPanXChange(newPanX);
       onPanYChange(newPanY);
-    },
-    [onScaleChange, onPanXChange, onPanYChange]
-  );
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [onScaleChange, onPanXChange, onPanYChange]);
 
   // --- Shape hit detection ---
 
@@ -894,7 +897,7 @@ export default function CanvasComponent({
     const point = getCanvasPoint(e);
     const hitShape = hitTestShapes(point);
 
-    if (hitShape?.type === 'text') {
+    if (hitShape.type === 'text') {
       const textShape = hitShape as TextShape;
       setEditingText({
         shapeId: textShape.id,
@@ -940,7 +943,6 @@ export default function CanvasComponent({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}
       />
       {/* Zoom level indicator */}
       <div
@@ -965,13 +967,15 @@ export default function CanvasComponent({
       {Array.from(remoteCursors.values()).map((cursor) => {
         const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
         const displayName = colorName ? `${colorName} ${cursor.name}` : cursor.name;
+        const screenX = cursor.x * scale + panX;
+        const screenY = cursor.y * scale + panY;
         return (
           <div
             key={cursor.userId}
             style={{
               position: 'fixed',
-              left: cursor.x,
-              top: cursor.y,
+              left: screenX,
+              top: screenY,
               pointerEvents: 'none',
               zIndex: 1000,
             }}
@@ -1022,8 +1026,8 @@ export default function CanvasComponent({
           onBlur={finishEditing}
           style={{
             position: 'fixed',
-            left: editingText.x,
-            top: editingText.y,
+            left: editingText.x * scale + panX,
+            top: editingText.y * scale + panY,
             minWidth: '100px',
             border: '2px solid #3b82f6',
             outline: 'none',
