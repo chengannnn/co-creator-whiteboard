@@ -74,7 +74,7 @@
       "title": "Text Tool",
       "description": "Add a text tool that lets users place editable text on the canvas, which can be moved and styled like other shapes.",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Text tool in toolbar",
         "Clicking canvas creates editable text field",

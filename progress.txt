@@ -67,3 +67,17 @@
   - rough.js `fillStyle` uses 'hachure' for hatch patterns, not 'hatch'; 'cross-hatch' also available
   - Style state flows: PropertiesPanel -> App handleStyleChange -> { updates defaultStyle for new shapes + updates selected shape in shapes array }
 ---
+
+## [2026-04-12] - story-5
+- Implemented text tool with inline editing
+- Features: Text tool in toolbar, click canvas to create text, Enter or blur to finish editing, double-click to re-edit, text selectable/movable/resizable like other shapes
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added TextShape interface, 'text' to ToolType, 'text' to Shape union
+  - packages/frontend/src/components/Toolbar.tsx: added Text tool button
+  - packages/frontend/src/components/CanvasComponent.tsx: added text rendering via canvas fillText, text placement on click, inline textarea overlay with focus/blur handling, finishEditing/cancelEditing functions, double-click to re-edit existing text
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Text shapes store bounds (width/height) that are computed dynamically from canvas.measureText(); newly created text shapes have width:0/height:0 and bounds are computed on-the-fly in getShapeBounds
+  - Text editing overlay uses position:fixed with canvas coordinates; need to guard handleMouseDown when editingText is active to prevent shape creation underneath the overlay
+  - Empty text shapes are removed on cancel or blur with empty content
+---
