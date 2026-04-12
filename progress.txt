@@ -63,7 +63,7 @@
   - packages/frontend/src/App.tsx: lifted selectedId state, integrated PropertiesPanel, handleStyleChange updates both selected shape and default style
 - TypeScript strict mode and ESLint pass
 - **Learnings for future iterations:**
-  - rough.js `strokeStyle` accepts 'solid' | 'dashed' directly, not CanvasLineCap
-  - rough.js `fillStyle` uses 'hachure' for hatch patterns, not 'hatch'
+  - rough.js uses `strokeLineDash` (e.g., `[8, 6]`) for dashed strokes, NOT `strokeStyle` or `strokeDashArray`
+  - rough.js `fillStyle` uses 'hachure' for hatch patterns, not 'hatch'; 'cross-hatch' also available
   - Style state flows: PropertiesPanel -> App handleStyleChange -> { updates defaultStyle for new shapes + updates selected shape in shapes array }
 ---
