@@ -176,3 +176,27 @@ Started: Sun Apr 12 16:08:46     2026
   - Default stroke color remains black (#000000) which provides good contrast on the yellow background
   - Remote cursor colors (from server-assigned hex colors) remain visible on the yellow canvas
 ---
+
+## [2026-04-12] - v2-story-3
+- Implemented complete button functions with keyboard shortcuts
+- Features added:
+  - Line tool (L/4): click-and-drag to draw straight lines with preview, auto-select after creation
+  - Eraser tool (X/7): click to delete single shape, drag to erase multiple shapes
+  - Ctrl+Y redo with forward history tracking
+  - Ctrl+A select all (multi-selection support with bounding boxes for all selected shapes)
+  - Clear Canvas button with confirmation dialog
+  - Tool keyboard shortcuts: V/1 (Select), R/2 (Rectangle), O/3 (Ellipse), L/4 (Line), P/5 (Freehand), X/7 (Eraser)
+  - Auto-select shapes after creation
+  - Multi-shape movement when multiple shapes selected
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: added LineShape interface, 'line' and 'eraser' to ToolType, 'line' to Shape union
+  - packages/frontend/src/components/Toolbar.tsx: added Line, Eraser tools and Clear Canvas button with divider
+  - packages/frontend/src/App.tsx: added forwardHistory state for redo, multi-selection (selectedIds array), keyboard shortcuts for tool switching/Ctrl+Y/Ctrl+A, clearCanvas function with confirmation
+  - packages/frontend/src/components/CanvasComponent.tsx: added Line tool drawing with preview, Line shape rendering and bounds, Eraser click/drag deletion, multi-selection bounding box rendering, multi-shape movement, auto-select on creation
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - `onSelectedIdsChange` expects `string[]` directly, not functional updaters — use `selectedIds.filter(...)` instead of `(prev) => prev.filter(...)`
+  - Multi-selection requires iterating over all selected IDs for drawing bboxes (not a single `selectedId`)
+  - Forward history is stored separately in App.tsx and cleared when new shapes are created via pushHistory
+  - Line shapes use `startX/startY/endX/endY` coordinates (not bounding boxes) but `getShapeBounds` converts to bbox for hit testing and resize
+---

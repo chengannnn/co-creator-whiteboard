@@ -6,16 +6,19 @@ const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] =
   { id: 'select', label: 'Select', icon: '◇', shortcut: 'V' },
   { id: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R' },
   { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O' },
+  { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
+  { id: 'eraser', label: 'Eraser', icon: '◻', shortcut: 'X' },
   { id: 'text', label: 'Text', icon: 'T', shortcut: 'T' },
 ];
 
 interface ToolbarProps {
   activeTool: ToolType;
   onToolChange: (tool: ToolType) => void;
+  onClearCanvas?: () => void;
 }
 
-export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
+export default function Toolbar({ activeTool, onToolChange, onClearCanvas }: ToolbarProps) {
   const [minimized, setMinimized] = useState(false);
 
   return (
@@ -98,6 +101,51 @@ export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
               {tool.icon}
             </button>
           ))}
+
+          {/* Divider */}
+          <div
+            style={{
+              width: '1px',
+              height: '24px',
+              backgroundColor: theme.divider,
+              margin: '0 4px',
+            }}
+          />
+
+          {/* Clear Canvas button */}
+          {onClearCanvas && (
+            <button
+              title="Clear Canvas"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClearCanvas();
+              }}
+              style={{
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid transparent',
+                borderRadius: '6px',
+                backgroundColor: theme.btnDefaultBg,
+                cursor: 'pointer',
+                fontSize: '16px',
+                color: theme.textSecondary,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.backgroundColor = '#fee2e2';
+                (e.target as HTMLElement).style.color = '#dc2626';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+                (e.target as HTMLElement).style.color = theme.textSecondary;
+              }}
+            >
+              🗑
+            </button>
+          )}
         </>
       )}
     </div>

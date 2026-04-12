@@ -24,9 +24,10 @@ function WhiteboardRoom() {
   const [activeTool, setActiveTool] = useState<ToolType>('rectangle');
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [history, setHistory] = useState<Shape[][]>([]);
+  const [forwardHistory, setForwardHistory] = useState<Shape[][]>([]);
   const [defaultStyle, setDefaultStyle] = useState<ShapeStyle>(DEFAULT_STYLE);
   void setDefaultStyle; // re-enabled in v2-story-5
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [userCount, setUserCount] = useState(1);
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
 
@@ -105,7 +106,8 @@ function WhiteboardRoom() {
           } else if (msg.type === 'sync_state' && Array.isArray(msg.shapes)) {
             setShapes(msg.shapes);
             setHistory([]);
-            setSelectedId(null);
+            setForwardHistory([]);
+            setSelectedIds([]);
             const owners = new Map<string, string>();
             for (const s of msg.shapes) {
               owners.set(s.id, '__remote__');
@@ -128,7 +130,7 @@ function WhiteboardRoom() {
           } else if (msg.type === 'shape_delete' && msg.shapeId) {
             isRemoteUpdate.current = true;
             setShapes((prev) => prev.filter((s) => s.id !== msg.shapeId));
-            setSelectedId((prev) => (prev === msg.shapeId ? null : prev));
+            setSelectedIds((prev) => prev.filter((id) => id !== msg.shapeId));
             setShapeOwners((prev) => {
               const next = new Map(prev);
               next.delete(msg.shapeId);
@@ -236,15 +238,66 @@ function WhiteboardRoom() {
   );
 
   // Re-enabled in v2-story-5 (properties panel)
-  // const selectedShape = shapes.find((s) => s.id === selectedId) ?? null;
+  // const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
   // const handleStyleChange = (style: ShapeStyle) => {
   //   setDefaultStyle(style);
-  //   if (selectedId) {
+  //   if (selectedIds.length > 0) {
   //     onShapesChange((prev) =>
-  //       prev.map((s) => (s.id === selectedId ? { ...s, style } : s))
+  //       prev.map((s) => (selectedIds.includes(s.id) ? { ...s, style } : s))
   //     );
   //   }
   // };
+
+  // Keyboard shortcuts: tool switching, undo/redo, select all
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      // Tool shortcuts
+      if (!e.ctrlKey && !e.metaKey) {
+        const toolMap: Record<string, ToolType> = {
+          v: 'select',
+          '1': 'select',
+          r: 'rectangle',
+          '2': 'rectangle',
+          o: 'ellipse',
+          '3': 'ellipse',
+          l: 'line',
+          '4': 'line',
+          p: 'freehand',
+          '5': 'freehand',
+          x: 'eraser',
+          '7': 'eraser',
+        };
+        if (toolMap[e.key]) {
+          e.preventDefault();
+          setActiveTool(toolMap[e.key]);
+          return;
+        }
+      }
+
+      // Ctrl+Y redo
+      if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (forwardHistory.length === 0) return;
+        const next = forwardHistory[forwardHistory.length - 1];
+        setForwardHistory(forwardHistory.slice(0, -1));
+        setHistory([...history, shapes]);
+        setShapes(next);
+        setSelectedIds([]);
+      }
+
+      // Ctrl+A select all
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setSelectedIds(shapes.map((s) => s.id));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [forwardHistory, history, shapes]);
 
   // Broadcast cursor position to other users (throttled to ~30fps)
   const broadcastCursor = useCallback((x: number, y: number, isDrawing: boolean) => {
@@ -266,9 +319,27 @@ function WhiteboardRoom() {
     }
   }, [userName]);
 
+  // Clear canvas with confirmation
+  const clearCanvas = useCallback(() => {
+    if (shapes.length === 0) return;
+    if (window.confirm('Clear the entire canvas? This cannot be undone.')) {
+      setForwardHistory([]);
+      // Save current state to history before clearing
+      setHistory([...history, shapes]);
+      onShapesChange([]);
+      setSelectedIds([]);
+      // Broadcast all shape deletions
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        for (const shape of shapes) {
+          wsRef.current.send(JSON.stringify({ type: 'shape_delete', shapeId: shape.id }));
+        }
+      }
+    }
+  }, [shapes, history, onShapesChange]);
+
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onClearCanvas={clearCanvas} />
       <CanvasComponent
         activeTool={activeTool}
         shapes={shapes}
@@ -276,8 +347,8 @@ function WhiteboardRoom() {
         history={history}
         onHistoryChange={setHistory}
         defaultStyle={defaultStyle}
-        selectedId={selectedId}
-        onSelectedIdChange={setSelectedId}
+        selectedIds={selectedIds}
+        onSelectedIdsChange={setSelectedIds}
         userId={userId}
         shapeOwners={shapeOwners}
         remoteCursors={remoteCursors}

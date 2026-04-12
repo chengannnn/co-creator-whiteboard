@@ -45,7 +45,7 @@
       "title": "Complete Button Functions with Keyboard Shortcuts",
       "description": "Implement all toolbar buttons with full functionality and keyboard shortcuts. Select (V/1), Rectangle (R/2), Ellipse (O/3), Line (L/4), Freehand (P/5), Eraser (X/7). Include Ctrl+Z/Y undo/redo, Delete to remove, Escape to deselect, Ctrl+A select all. Each button shows tooltip with shortcut.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Select tool (V/1): click to select, drag to move, resize handles, Delete to remove, Escape to deselect, Ctrl+A select all",
         "Rectangle tool (R/2): click and drag to draw, preview during drawing, auto-select after creation",

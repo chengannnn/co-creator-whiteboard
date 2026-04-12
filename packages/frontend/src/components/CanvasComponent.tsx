@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape } from '../types/shapes';
+import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape } from '../types/shapes';
 import { theme } from '../theme';
 
 interface CanvasComponentProps {
@@ -10,8 +10,8 @@ interface CanvasComponentProps {
   history: Shape[][];
   onHistoryChange: (history: Shape[][]) => void;
   defaultStyle: ShapeStyle;
-  selectedId: string | null;
-  onSelectedIdChange: (id: string | null) => void;
+  selectedIds: string[];
+  onSelectedIdsChange: (ids: string[]) => void;
   userId: string | null;
   shapeOwners: Map<string, string>;
   remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string; isDrawing: boolean }>;
@@ -68,8 +68,8 @@ export default function CanvasComponent({
   history,
   onHistoryChange,
   defaultStyle,
-  selectedId,
-  onSelectedIdChange,
+  selectedIds,
+  onSelectedIdsChange,
   userId,
   shapeOwners,
   remoteCursors,
@@ -133,8 +133,8 @@ export default function CanvasComponent({
     const previous = history[history.length - 1];
     onHistoryChange(history.slice(0, -1));
     onShapesChange(previous);
-    onSelectedIdChange(null);
-  }, [history, onHistoryChange, onShapesChange, onSelectedIdChange]);
+    onSelectedIdsChange([]);
+  }, [history, onHistoryChange, onShapesChange, onSelectedIdsChange]);
 
   // --- Pan/Zoom helpers ---
 
@@ -171,6 +171,14 @@ export default function CanvasComponent({
         y: Math.min(...ys),
         width: Math.max(...xs) - Math.min(...xs),
         height: Math.max(...ys) - Math.min(...ys),
+      };
+    }
+    if (shape.type === 'line') {
+      return {
+        x: Math.min(shape.startX, shape.endX),
+        y: Math.min(shape.startY, shape.endY),
+        width: Math.abs(shape.endX - shape.startX),
+        height: Math.abs(shape.endY - shape.startY),
       };
     }
     // Text shapes: measure content if width is 0 (newly created)
@@ -249,6 +257,12 @@ export default function CanvasComponent({
           strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
         });
       }
+    } else if (shape.type === 'line') {
+      rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], {
+        stroke: style.strokeColor,
+        strokeWidth: style.strokeWidth,
+        strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
+      });
     } else if (shape.type === 'text') {
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx && shape.content) {
@@ -305,12 +319,12 @@ export default function CanvasComponent({
       }
     }
 
-    // Draw selection bounding box
-    if (selectedId) {
-      const shape = shapes.find((s) => s.id === selectedId);
-      if (!shape) return;
+    // Draw selection bounding boxes
+    for (const selId of selectedIds) {
+      const shape = shapes.find((s) => s.id === selId);
+      if (!shape) continue;
       const bbox = getBBox(shape);
-      if (!bbox) return;
+      if (!bbox) continue;
 
       // Use owner color for remote shapes, default blue for own shapes
       const ownerId = shapeOwners.get(shape.id);
@@ -334,7 +348,7 @@ export default function CanvasComponent({
     }
 
     ctx.restore();
-  }, [shapes, selectedId, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform]);
+  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -354,7 +368,7 @@ export default function CanvasComponent({
 
   useEffect(() => {
     redrawCanvas();
-  }, [shapes, selectedId, redrawCanvas, scale]);
+  }, [shapes, selectedIds, redrawCanvas, scale]);
 
   // --- Keyboard handlers ---
 
@@ -366,22 +380,23 @@ export default function CanvasComponent({
         return;
       }
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        pushHistory(shapes.filter((s) => s.id !== selectedId));
-        onSelectedIdChange(null);
+        const selectedIdSet = new Set(selectedIds);
+        pushHistory(shapes.filter((s) => !selectedIdSet.has(s.id)));
+        onSelectedIdsChange([]);
       }
 
       if (e.key === 'Escape') {
-        onSelectedIdChange(null);
+        onSelectedIdsChange([]);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undo, pushHistory, onSelectedIdChange]);
+  }, [selectedIds, shapes, undo, pushHistory, onSelectedIdsChange]);
 
   // Track space key state for pan modifier
   useEffect(() => {
@@ -509,7 +524,9 @@ export default function CanvasComponent({
   // --- Resize handle hit detection ---
 
   const hitTestHandles = (point: Point): ResizeHandle | null => {
-    const selected = shapes.find((s) => s.id === selectedId);
+    const primaryId = selectedIds[selectedIds.length - 1];
+    if (!primaryId) return null;
+    const selected = shapes.find((s) => s.id === primaryId);
     if (!selected) return null;
     const bbox = getBBox(selected);
     if (!bbox) return null;
@@ -642,6 +659,19 @@ export default function CanvasComponent({
       };
     }
 
+    if (shape.type === 'line') {
+      const origBounds = getShapeBounds(shape);
+      const offsetX = x - origBounds.x;
+      const offsetY = y - origBounds.y;
+      return {
+        ...shape,
+        startX: shape.startX + offsetX,
+        startY: shape.startY + offsetY,
+        endX: shape.endX + offsetX,
+        endY: shape.endY + offsetY,
+      } as LineShape;
+    }
+
     return { ...shape, x, y, width, height };
   };
 
@@ -650,6 +680,18 @@ export default function CanvasComponent({
   const handleMouseDown = (e: React.MouseEvent) => {
     // If currently editing text, don't process other mouse events
     if (editingText) return;
+
+    // Eraser tool: delete shape on click
+    if (activeTool === 'eraser') {
+      const point = getCanvasPoint(e);
+      const hitShape = hitTestShapes(point);
+      if (hitShape) {
+        pushHistory(shapes.filter((s) => s.id !== hitShape.id));
+        onSelectedIdsChange(selectedIds.filter((id) => id !== hitShape.id));
+      }
+      setInteractionMode('drawing');
+      return;
+    }
 
     const point = getCanvasPoint(e);
 
@@ -692,9 +734,10 @@ export default function CanvasComponent({
 
     // Select tool
     const handle = hitTestHandles(point);
-    if (handle && selectedId) {
+    const primaryId = selectedIds[selectedIds.length - 1];
+    if (handle && primaryId) {
       // Start resizing
-      const shape = shapes.find((s) => s.id === selectedId);
+      const shape = shapes.find((s) => s.id === primaryId);
       if (shape) {
         const bounds = getShapeBounds(shape);
         resizeStartBounds.current = { ...bounds };
@@ -706,12 +749,12 @@ export default function CanvasComponent({
 
     const hitShape = hitTestShapes(point);
     if (hitShape) {
-      onSelectedIdChange(hitShape.id);
+      onSelectedIdsChange([hitShape.id]);
       const bounds = getShapeBounds(hitShape);
       moveOffset.current = { x: point.x - bounds.x, y: point.y - bounds.y };
       setInteractionMode('moving');
     } else {
-      onSelectedIdChange(null);
+      onSelectedIdsChange([]);
       setInteractionMode('selecting');
     }
   };
@@ -720,6 +763,16 @@ export default function CanvasComponent({
     const point = getCanvasPoint(e);
 
     if (interactionMode === 'drawing') {
+      // Eraser: delete shapes under cursor during drag
+      if (activeTool === 'eraser') {
+        const hitShape = hitTestShapes(point);
+        if (hitShape) {
+          pushHistory(shapes.filter((s) => s.id !== hitShape.id));
+          onSelectedIdsChange(selectedIds.filter((id) => id !== hitShape.id));
+        }
+        return;
+      }
+
       broadcastCursor(point.x, point.y, true);
       if (activeTool === 'freehand') {
         currentPoints.current.push(point);
@@ -753,28 +806,51 @@ export default function CanvasComponent({
             stroke: defaultStyle.strokeColor,
             strokeWidth: defaultStyle.strokeWidth,
           });
+        } else if (activeTool === 'line') {
+          rc.linearPath(
+            [[start.x, start.y], [point.x, point.y]],
+            {
+              stroke: defaultStyle.strokeColor,
+              strokeWidth: defaultStyle.strokeWidth,
+              strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
+            },
+          );
         }
       }
       return;
     }
 
-    if (interactionMode === 'moving' && selectedId) {
-      const shape = shapes.find((s) => s.id === selectedId);
-      if (!shape) return;
+    if (interactionMode === 'moving' && selectedIds.length > 0) {
+      const primaryId = selectedIds[selectedIds.length - 1];
+      const primaryShape = shapes.find((s) => s.id === primaryId);
+      if (!primaryShape) return;
 
-      const bounds = getShapeBounds(shape);
+      const bounds = getShapeBounds(primaryShape);
       const newX = point.x - moveOffset.current.x;
       const newY = point.y - moveOffset.current.y;
       const dx = newX - bounds.x;
       const dy = newY - bounds.y;
 
+      // Only apply offset if there's actual movement
+      if (dx === 0 && dy === 0) return;
+
+      const selectedIdSet = new Set(selectedIds);
       const newShapes = shapes.map((s) => {
-        if (s.id !== selectedId) return s;
+        if (!selectedIdSet.has(s.id)) return s;
         if (s.type === 'freehand') {
           return {
             ...s,
             points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
           };
+        }
+        if (s.type === 'line') {
+          return {
+            ...s,
+            startX: s.startX + dx,
+            startY: s.startY + dy,
+            endX: s.endX + dx,
+            endY: s.endY + dy,
+          } as LineShape;
         }
         return { ...s, x: s.x + dx, y: s.y + dy };
       });
@@ -783,8 +859,9 @@ export default function CanvasComponent({
       return;
     }
 
-    if (interactionMode === 'resizing' && selectedId && activeHandle) {
-      const shape = shapes.find((s) => s.id === selectedId);
+    if (interactionMode === 'resizing' && selectedIds.length > 0 && activeHandle) {
+      const primaryId = selectedIds[selectedIds.length - 1];
+      const shape = shapes.find((s) => s.id === primaryId);
       if (!shape) return;
 
       const orig = resizeStartBounds.current;
@@ -792,7 +869,7 @@ export default function CanvasComponent({
       const dy = point.y - (orig.y + (activeHandle.includes('s') ? orig.height : 0));
 
       const resized = applyResize(shape, activeHandle, dx, dy);
-      const newShapes = shapes.map((s) => (s.id === selectedId ? resized : s));
+      const newShapes = shapes.map((s) => (s.id === primaryId ? resized : s));
       onShapesChange(newShapes);
       return;
     }
@@ -806,7 +883,7 @@ export default function CanvasComponent({
     }
 
     // Update cursor style based on hover
-    if (activeTool === 'select' && selectedId) {
+    if (activeTool === 'select' && selectedIds.length > 0) {
       const handle = hitTestHandles(point);
       if (handle) {
         const cursorMap: Record<ResizeHandle, string> = {
@@ -861,10 +938,25 @@ export default function CanvasComponent({
             style: { ...defaultStyle },
           };
         }
+      } else if (activeTool === 'line') {
+        const dx = Math.abs(point.x - start.x);
+        const dy = Math.abs(point.y - start.y);
+        if (dx > 3 || dy > 3) {
+          newShape = {
+            id: generateId(),
+            type: 'line',
+            startX: start.x,
+            startY: start.y,
+            endX: point.x,
+            endY: point.y,
+            style: { ...defaultStyle },
+          } as LineShape;
+        }
       }
 
       if (newShape) {
         pushHistory([...shapes, newShape]);
+        onSelectedIdsChange([newShape.id]);
       } else {
         redrawCanvas();
       }
@@ -922,13 +1014,15 @@ export default function CanvasComponent({
         ? 'grabbing'
         : interactionMode === 'resizing'
           ? 'crosshair'
-          : activeTool === 'select' && spacePressed.current
-            ? 'grab'
-            : activeTool === 'select'
-              ? 'default'
-              : activeTool === 'text'
-                ? 'text'
-                : 'crosshair';
+          : activeTool === 'eraser'
+            ? 'cell'
+            : activeTool === 'select' && spacePressed.current
+              ? 'grab'
+              : activeTool === 'select'
+                ? 'default'
+                : activeTool === 'text'
+                  ? 'text'
+                  : 'crosshair';
 
   return (
     <>
