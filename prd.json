@@ -65,7 +65,7 @@
       "title": "Double-Click Text Editing",
       "description": "Remove the separate Text tool button from toolbar. Instead, double-clicking anywhere on the canvas opens an inline text editor. Text shapes can be edited by double-clicking existing text. No dedicated text tool needed.",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Double-click on empty canvas area opens inline text editor",
         "Text editor: white background, light yellow border, auto-focused cursor",

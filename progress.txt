@@ -200,3 +200,17 @@ Started: Sun Apr 12 16:08:46     2026
   - Forward history is stored separately in App.tsx and cleared when new shapes are created via pushHistory
   - Line shapes use `startX/startY/endX/endY` coordinates (not bounding boxes) but `getShapeBounds` converts to bbox for hit testing and resize
 ---
+
+## [2026-04-12] - v2-story-4
+- Implemented double-click text editing
+- Features: removed Text tool button from toolbar, double-click on empty canvas opens inline text editor, double-click existing text shape enters edit mode, Enter confirms text, Escape cancels editing, empty text does not create shape
+- Files changed:
+  - packages/frontend/src/types/shapes.ts: removed 'text' from ToolType union
+  - packages/frontend/src/components/Toolbar.tsx: removed Text tool from TOOLS array
+  - packages/frontend/src/components/CanvasComponent.tsx: changed handleDoubleClick to create text on empty canvas (instead of reset zoom), removed activeTool === 'text' mouse handling, removed 'text' cursor style
+- TypeScript strict mode and ESLint pass for both packages
+- **Learnings for future iterations:**
+  - Text creation now triggered via double-click (not via a tool mode) — the TextShape type and editing overlay logic remain unchanged
+  - Double-click zoom reset was removed; zoom reset is no longer available via double-click (was never an acceptance criteria in v2)
+  - The text editing overlay (textarea with position:fixed) works the same way regardless of how editing is initiated
+---

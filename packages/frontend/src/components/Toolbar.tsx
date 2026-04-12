@@ -9,7 +9,6 @@ const TOOLS: { id: ToolType; label: string; icon: string; shortcut: string }[] =
   { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
   { id: 'eraser', label: 'Eraser', icon: '◻', shortcut: 'X' },
-  { id: 'text', label: 'Text', icon: 'T', shortcut: 'T' },
 ];
 
 interface ToolbarProps {

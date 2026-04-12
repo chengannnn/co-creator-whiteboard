@@ -704,25 +704,6 @@ export default function CanvasComponent({
       return;
     }
 
-    if (activeTool === 'text') {
-      // Create a new text shape and start inline editing
-      const id = generateId();
-      const newShape: TextShape = {
-        id,
-        type: 'text',
-        x: point.x,
-        y: point.y,
-        width: 0,
-        height: 20,
-        content: '',
-        fontSize: 20,
-        style: { ...defaultStyle },
-      };
-      pushHistory([...shapes, newShape]);
-      setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20 });
-      return;
-    }
-
     if (activeTool !== 'select') {
       // Drawing mode
       isDrawing.current = true;
@@ -991,10 +972,21 @@ export default function CanvasComponent({
     const hitShape = hitTestShapes(point);
 
     if (!hitShape) {
-      // Double-click on empty canvas resets zoom to 100%
-      onScaleChange(1);
-      onPanXChange(0);
-      onPanYChange(0);
+      // Double-click on empty canvas opens inline text editor
+      const id = generateId();
+      const newShape: TextShape = {
+        id,
+        type: 'text',
+        x: point.x,
+        y: point.y,
+        width: 0,
+        height: 20,
+        content: '',
+        fontSize: 20,
+        style: { ...defaultStyle },
+      };
+      pushHistory([...shapes, newShape]);
+      setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20 });
     } else if (hitShape.type === 'text') {
       const textShape = hitShape as TextShape;
       setEditingText({
@@ -1020,9 +1012,7 @@ export default function CanvasComponent({
               ? 'grab'
               : activeTool === 'select'
                 ? 'default'
-                : activeTool === 'text'
-                  ? 'text'
-                  : 'crosshair';
+                : 'crosshair';
 
   return (
     <>
