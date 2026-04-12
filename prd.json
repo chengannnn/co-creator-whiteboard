@@ -1,0 +1,154 @@
+{
+  "title": "Online Collaborative Whiteboard MVP",
+  "branchName": "feature/collaborative-whiteboard-mvp",
+  "userStories": [
+    {
+      "id": "story-1",
+      "title": "Project Scaffolding",
+      "description": "Set up a monorepo with frontend (React + Vite + TypeScript) and backend (Node.js + Express + ws) packages. Include TypeScript strict mode, ESLint, and concurrent dev scripts.",
+      "priority": 1,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Monorepo structure with packages/frontend and packages/backend",
+        "Vite + React + TypeScript dev server runs on port 5173",
+        "Node.js + Express server runs on port 3001",
+        "TypeScript strict mode enabled",
+        "npm run dev starts both frontend and backend concurrently",
+        "ESLint configured with basic rules",
+        "Root package.json with workspace configuration"
+      ],
+      "estimate": "small"
+    },
+    {
+      "id": "story-2",
+      "title": "Canvas with Basic Drawing Tools",
+      "description": "Implement a full-screen canvas with a left toolbar offering Select, Rectangle, Ellipse, and Freehand (Pencil) tools. Shapes render with hand-drawn aesthetic via rough.js.",
+      "priority": 2,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Full-screen canvas area with white background",
+        "Toolbar on the left side with tool buttons: Select, Rectangle, Ellipse, Freehand",
+        "Click and drag to draw rectangles and ellipses",
+        "Freehand drawing follows mouse/pen movement",
+        "Shapes render with hand-drawn aesthetic (rough.js)",
+        "Selected tool is visually highlighted in toolbar",
+        "Drawing works smoothly at 60fps"
+      ],
+      "estimate": "medium"
+    },
+    {
+      "id": "story-3",
+      "title": "Shape Selection and Manipulation",
+      "description": "Allow users to select shapes, move them, resize via handles, and delete them. Include basic undo support.",
+      "priority": 3,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Clicking a shape selects it (shows bounding box with resize handles)",
+        "Dragging a selected shape moves it",
+        "Dragging resize handles resizes the shape",
+        "Pressing Delete/Backspace removes the selected shape",
+        "Clicking empty canvas deselects",
+        "Undo (Ctrl+Z) works for the last action"
+      ],
+      "estimate": "medium"
+    },
+    {
+      "id": "story-4",
+      "title": "Shape Styling",
+      "description": "Add a properties bar for changing stroke color, fill color, stroke width, stroke style, and fill style of selected shapes.",
+      "priority": 4,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Properties panel shows styling options when a shape is selected",
+        "Color picker with 8+ preset colors and custom color support",
+        "Stroke width selector: thin (1px), medium (2px), thick (4px)",
+        "Fill toggle: none, solid, hatch",
+        "Stroke style: solid, dashed",
+        "Changes apply immediately to selected shape",
+        "Defaults: black stroke, 2px width, no fill"
+      ],
+      "estimate": "small"
+    },
+    {
+      "id": "story-5",
+      "title": "Text Tool",
+      "description": "Add a text tool that lets users place editable text on the canvas, which can be moved and styled like other shapes.",
+      "priority": 5,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Text tool in toolbar",
+        "Clicking canvas creates editable text field",
+        "Enter or clicking away finishes editing",
+        "Text can be selected, moved, and resized",
+        "Default font: system sans-serif, 20px",
+        "Text content stored in shape data model"
+      ],
+      "estimate": "small"
+    },
+    {
+      "id": "story-6",
+      "title": "Room-Based Collaboration",
+      "description": "Implement room creation and joining via unique URL. Display room ID, share button, and user count.",
+      "priority": 6,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Visiting / generates unique room ID and redirects to /room/:roomId",
+        "Visiting /room/:roomId joins that room",
+        "Room ID is short, readable string (e.g., a3f7k2)",
+        "Share button copies room URL to clipboard",
+        "Current user count displayed",
+        "Room cleaned up 5 minutes after last user leaves"
+      ],
+      "estimate": "small"
+    },
+    {
+      "id": "story-7",
+      "title": "Real-Time Shape Sync",
+      "description": "Broadcast shape create/update/delete events to all users in the room via WebSocket. Handle disconnect/reconnect gracefully.",
+      "priority": 7,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Shape changes appear on all users' canvases within 200ms",
+        "WebSocket connects on room join, sends full canvas state",
+        "Delta updates broadcast per mutation",
+        "Concurrent edits merged without conflicts (last-write-wins acceptable)",
+        "Disconnect shows Reconnecting banner; reconnect re-syncs full state",
+        "Shapes from other users attributed with colored border"
+      ],
+      "estimate": "large"
+    },
+    {
+      "id": "story-8",
+      "title": "Live Cursor Presence",
+      "description": "Show other users' cursors with colored pointers and random names, updated in real-time.",
+      "priority": 8,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Each user assigned random color and random name (e.g., Purple Fox)",
+        "Other users' cursors rendered as colored pointers with name labels",
+        "Cursor position throttled to 30fps via WebSocket",
+        "Cursor disappears when user leaves",
+        "Drawing users show pencil indicator on cursor",
+        "Cursor names render on top layer, never overlapping shapes"
+      ],
+      "estimate": "medium"
+    },
+    {
+      "id": "story-9",
+      "title": "Canvas Pan and Zoom",
+      "description": "Add mouse wheel zoom, middle-click/space+drag pan, zoom level indicator, and double-click reset.",
+      "priority": 9,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Mouse wheel zooms in/out centered on cursor",
+        "Middle-click drag or space+drag pans the canvas",
+        "Zoom range: 10% to 500%",
+        "Zoom level indicator in bottom-right corner",
+        "Double-click on empty canvas resets zoom to 100%",
+        "All shapes render correctly at all zoom levels",
+        "Pan/zoom state is per-user (not shared)"
+      ],
+      "estimate": "medium"
+    }
+  ]
+}
