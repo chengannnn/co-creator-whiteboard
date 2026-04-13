@@ -432,3 +432,18 @@ Started: Sun Apr 12 16:08:46     2026
   - Solid tool variants (rectangle-solid, ellipse-solid, rhombus-solid) use getBaseShapeTool() helper to map to base types for canvas drawing logic
   - Eraser bypasses the standard drawing flow — it tracks points for pixel-level erasing via destination-out compositing, not shape creation
 ---
+
+## [2026-04-13] - v2.1-save
+- Implemented PNG export of canvas content
+- Features: save button in UnifiedToolbar Row 2 (download icon + "Save" label), exports all shapes' minimum bounding box + 20px padding as .png, browser native download via canvas.toBlob() + <a download>, filename format: whiteboard-{roomId}-{timestamp}.png
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: added forwardRef + useImperativeHandle to expose exportPng function, moved getShapeBounds to module level for stable reference, export renders all shape types (rectangle, ellipse, rhombus, line, arrow, freehand, image, text) to offscreen canvas with rough.js, background matches theme.canvasBg
+  - packages/frontend/src/components/UnifiedToolbar.tsx: added onSave prop, added save button in Row 2 with SVG download icon
+  - packages/frontend/src/App.tsx: added canvasRef for CanvasComponent, added handleExportPng callback, passed onSave to UnifiedToolbar and ref to CanvasComponent
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - forwardRef requires function signature `(props, ref)` — ref is the second parameter
+  - useImperativeHandle is the cleanest way to expose child component methods to parent without prop drilling callbacks
+  - rough.js uses `strokeLineDash` (array) for dashed strokes, NOT `strokeStyle`
+  - Module-level helper functions (like getShapeBounds) are stable references and don't cause re-render issues when used in hook dependency arrays
+  - Offscreen canvas export works by creating a new canvas element, rendering shapes with rough.js, then using canvas.toBlob() for download

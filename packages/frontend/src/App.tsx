@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import BottomPanel from './components/BottomPanel';
 import UnifiedToolbar from './components/UnifiedToolbar';
-import CanvasComponent from './components/CanvasComponent';
+import CanvasComponent, { CanvasComponentRef } from './components/CanvasComponent';
 import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape, StrokeWidth, StrokeStyle } from './types/shapes';
 
 interface RemoteCursor {
@@ -55,6 +55,7 @@ function WhiteboardRoom() {
   const [locked, setLocked] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const canvasRef = useRef<CanvasComponentRef>(null);
   const shapesRef = useRef<Shape[]>([]);
   const userIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string>('#3b82f6');
@@ -451,6 +452,11 @@ function WhiteboardRoom() {
     img.src = dataUrl;
   };
 
+  // Export canvas as PNG
+  const handleExportPng = useCallback(() => {
+    canvasRef.current?.exportPng();
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <UnifiedToolbar
@@ -467,8 +473,10 @@ function WhiteboardRoom() {
         onEraserRadiusChange={setEraserRadius}
         locked={locked}
         onLockChange={setLocked}
+        onSave={handleExportPng}
       />
       <CanvasComponent
+        ref={canvasRef}
         activeTool={activeTool}
         shapes={shapes}
         onShapesChange={onShapesChange}

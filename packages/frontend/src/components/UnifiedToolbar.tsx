@@ -57,6 +57,7 @@ interface UnifiedToolbarProps {
   onEraserRadiusChange: (radius: number) => void;
   locked: boolean;
   onLockChange: (locked: boolean) => void;
+  onSave: () => void;
 }
 
 export default function UnifiedToolbar({
@@ -73,6 +74,7 @@ export default function UnifiedToolbar({
   onEraserRadiusChange,
   locked,
   onLockChange,
+  onSave,
 }: UnifiedToolbarProps) {
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -510,6 +512,45 @@ export default function UnifiedToolbar({
             ))}
           </div>
         </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '20px', backgroundColor: theme.divider }} />
+
+        {/* Save/Export button */}
+        <button
+          title="Export as PNG"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSave();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            border: `1px solid ${theme.btnBorder}`,
+            borderRadius: '4px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '11px',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Save
+        </button>
       </div>
     </div>
   );

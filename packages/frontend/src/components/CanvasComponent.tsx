@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape, ArrowShape } from '../types/shapes';
 import { theme } from '../theme';
@@ -71,7 +71,49 @@ const HEX_TO_COLOR_NAME: Record<string, string> = {
   '#84cc16': 'Lime',
 };
 
-export default function CanvasComponent({
+// Compute bounding box of a shape in world coordinates
+function getShapeBounds(shape: Shape, canvasEl?: HTMLCanvasElement | null): { x: number; y: number; width: number; height: number } {
+  if (shape.type === 'freehand') {
+    const xs = shape.points.map((p) => p.x);
+    const ys = shape.points.map((p) => p.y);
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+    };
+  }
+  if (shape.type === 'line' || shape.type === 'arrow') {
+    return {
+      x: Math.min(shape.startX, shape.endX),
+      y: Math.min(shape.startY, shape.endY),
+      width: Math.abs(shape.endX - shape.startX),
+      height: Math.abs(shape.endY - shape.startY),
+    };
+  }
+  // Text shapes: measure content if width is 0 (newly created)
+  if (shape.type === 'text' && shape.width === 0 && shape.height === 0) {
+    const ctx = canvasEl?.getContext('2d');
+    if (ctx && shape.content) {
+      ctx.font = `${shape.fontSize}px sans-serif`;
+      const metrics = ctx.measureText(shape.content);
+      return {
+        x: shape.x,
+        y: shape.y,
+        width: Math.ceil(metrics.width),
+        height: shape.fontSize,
+      };
+    }
+    return { x: shape.x, y: shape.y, width: 100, height: shape.fontSize };
+  }
+  return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+}
+
+export interface CanvasComponentRef {
+  exportPng: () => void;
+}
+
+export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function CanvasComponent({
   activeTool,
   shapes,
   onShapesChange,
@@ -92,7 +134,7 @@ export default function CanvasComponent({
   onScaleChange,
   eraserRadius,
   locked,
-}: CanvasComponentProps) {
+}: CanvasComponentProps, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
@@ -195,43 +237,6 @@ export default function CanvasComponent({
 
   // --- Helper functions (must be before redrawCanvas) ---
 
-  const getShapeBounds = (shape: Shape): { x: number; y: number; width: number; height: number } => {
-    if (shape.type === 'freehand') {
-      const xs = shape.points.map((p) => p.x);
-      const ys = shape.points.map((p) => p.y);
-      return {
-        x: Math.min(...xs),
-        y: Math.min(...ys),
-        width: Math.max(...xs) - Math.min(...xs),
-        height: Math.max(...ys) - Math.min(...ys),
-      };
-    }
-    if (shape.type === 'line' || shape.type === 'arrow') {
-      return {
-        x: Math.min(shape.startX, shape.endX),
-        y: Math.min(shape.startY, shape.endY),
-        width: Math.abs(shape.endX - shape.startX),
-        height: Math.abs(shape.endY - shape.startY),
-      };
-    }
-    // Text shapes: measure content if width is 0 (newly created)
-    if (shape.type === 'text' && shape.width === 0 && shape.height === 0) {
-      const ctx = canvasRef.current?.getContext('2d');
-      if (ctx && shape.content) {
-        ctx.font = `${shape.fontSize}px sans-serif`;
-        const metrics = ctx.measureText(shape.content);
-        return {
-          x: shape.x,
-          y: shape.y,
-          width: Math.ceil(metrics.width),
-          height: shape.fontSize,
-        };
-      }
-      return { x: shape.x, y: shape.y, width: 100, height: shape.fontSize };
-    }
-    return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
-  };
-
   const getBBox = useCallback((shape: Shape | null) => {
     if (!shape) return null;
     const b = getShapeBounds(shape);
@@ -256,6 +261,138 @@ export default function CanvasComponent({
       w: { x: bbox.x - half, y: bbox.y + bbox.height / 2 - half },
     };
   }, []);
+
+  // Expose export function to parent via ref
+  useImperativeHandle(ref, () => ({
+    exportPng: () => {
+      const allShapes = shapes;
+      if (allShapes.length === 0) return;
+
+      // Compute minimum bounding box of all shapes
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const shape of allShapes) {
+        const bounds = getShapeBounds(shape);
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.width);
+        maxY = Math.max(maxY, bounds.y + bounds.height);
+      }
+
+      const padding = 20;
+      const exportWidth = maxX - minX + padding * 2;
+      const exportHeight = maxY - minY + padding * 2;
+
+      // Create offscreen canvas
+      const offscreen = document.createElement('canvas');
+      offscreen.width = exportWidth;
+      offscreen.height = exportHeight;
+      const ctx = offscreen.getContext('2d');
+      if (!ctx) return;
+
+      const rc = new RoughCanvas(offscreen);
+
+      // Background matching current theme
+      ctx.fillStyle = theme.canvasBg;
+      ctx.fillRect(0, 0, exportWidth, exportHeight);
+
+      // Apply transform: shift content so minX-padding maps to 0
+      ctx.setTransform(1, 0, 0, 1, -minX + padding, -minY + padding);
+
+      // Render all shapes
+      for (const shape of allShapes) {
+        const style = shape.style;
+        const fill = style.fillStyle === 'none' ? undefined : style.fillColor;
+        const lineDash = style.strokeStyle === 'dashed' ? [8, 6] : undefined;
+
+        switch (shape.type) {
+          case 'rectangle':
+            rc.rectangle(shape.x, shape.y, shape.width, shape.height, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            break;
+          case 'ellipse':
+            rc.ellipse(shape.x + shape.width / 2, shape.y + shape.height / 2, shape.width, shape.height, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            break;
+          case 'rhombus':
+            rc.polygon([
+              [shape.x + shape.width / 2, shape.y],
+              [shape.x + shape.width, shape.y + shape.height / 2],
+              [shape.x + shape.width / 2, shape.y + shape.height],
+              [shape.x, shape.y + shape.height / 2],
+            ], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            break;
+          case 'line':
+            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
+            break;
+          case 'arrow': {
+            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
+            // Arrowhead
+            const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
+            const headSize = style.strokeWidth * 3;
+            ctx.save();
+            ctx.fillStyle = style.strokeColor;
+            ctx.translate(shape.endX, shape.endY);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-headSize, -headSize / 2);
+            ctx.lineTo(-headSize, headSize / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            break;
+          }
+          case 'freehand':
+            if (shape.points.length > 1) {
+              const pts = shape.points.map((p) => [p.x, p.y] as [number, number]);
+              rc.linearPath(pts, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, roughness: 0.5, strokeLineDash: lineDash });
+            }
+            break;
+          case 'image': {
+            const img = imageCacheRef.current.get(shape.src);
+            if (img && img.complete && img.naturalWidth > 0) {
+              ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
+            }
+            break;
+          }
+          case 'text':
+            ctx.save();
+            ctx.fillStyle = style.strokeColor;
+            ctx.font = `${shape.fontSize}px sans-serif`;
+            ctx.fillText(shape.content, shape.x, shape.y + shape.fontSize);
+            ctx.restore();
+            break;
+        }
+      }
+
+      // Draw colored borders on remote shapes
+      for (const shape of allShapes) {
+        const ownerId = shapeOwners.get(shape.id);
+        if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
+          const bounds = getShapeBounds(shape);
+          const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
+          ctx.save();
+          ctx.strokeStyle = borderColor;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([]);
+          ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+          ctx.restore();
+        }
+      }
+
+      // Download
+      offscreen.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const roomId = window.location.pathname.split('/').pop() || 'unknown';
+        a.download = `whiteboard-${roomId}-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    },
+  }), [shapes, userId, shapeOwners]);
 
   const drawShape = (
     rc: RoughCanvas,
@@ -1509,7 +1646,7 @@ export default function CanvasComponent({
       )}
     </>
   );
-}
+});
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
