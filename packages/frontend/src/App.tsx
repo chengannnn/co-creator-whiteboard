@@ -459,6 +459,31 @@ function WhiteboardRoom() {
     canvasRef.current?.exportPng();
   }, []);
 
+  // Zoom in/out centered on viewport center (25% step, 10%-500% range)
+  const handleZoomIn = useCallback(() => {
+    setScale((prev) => {
+      const newScale = Math.min(5, prev + 0.25);
+      const scaleRatio = newScale / prev;
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      setPanX((px) => cx - (cx - px) * scaleRatio);
+      setPanY((py) => cy - (cy - py) * scaleRatio);
+      return newScale;
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale((prev) => {
+      const newScale = Math.max(0.1, prev - 0.25);
+      const scaleRatio = newScale / prev;
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      setPanX((px) => cx - (cx - px) * scaleRatio);
+      setPanY((py) => cy - (cy - py) * scaleRatio);
+      return newScale;
+    });
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <UnifiedToolbar
@@ -509,6 +534,8 @@ function WhiteboardRoom() {
         wsStatus={wsStatus}
         scale={scale}
         themeMode={themeMode}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
       />
     </div>
   );

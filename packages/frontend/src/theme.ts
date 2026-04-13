@@ -35,6 +35,9 @@ const lightTheme = {
   // Copied state
   copiedBg: '#fef3c7',
   copiedText: '#92400e',
+
+  // Zoom control
+  zoomBg: 'rgba(240, 230, 200, 0.5)',
 };
 
 // Dark palette for the whiteboard application.
@@ -74,6 +77,9 @@ const darkTheme = {
   // Copied state
   copiedBg: '#422006',
   copiedText: '#fbbf24',
+
+  // Zoom control
+  zoomBg: 'rgba(60, 60, 60, 0.5)',
 };
 
 // Stroke color mapping for dark mode — render-time inversion

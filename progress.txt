@@ -480,3 +480,16 @@ Started: Sun Apr 12 16:08:46     2026
   - `theme` is computed via `getThemeColors(themeMode)` at component top level — all `theme.*` references automatically adapt without individual updates
   - ESLint `react-hooks/exhaustive-deps` flags `theme.canvasBg` as missing dependency — since `theme` is derived from `themeMode`, add `themeMode` to deps and use `eslint-disable` comment for the `theme.*` false positives
   - Preview drawing (handleMouseMove) also needs `getStrokeColor` for stroke colors — otherwise shape previews during drag will use light-mode colors in dark mode
+
+## [2026-04-13] - v2.1-zoom
+- Implemented zoom in/out buttons in bottom-right panel
+- Features: capsule-shaped zoom control with [-] shrink → percentage text → [+] enlarge, 25% step per click, range 10%-500%, viewport center zoom, mouse wheel zoom still works alongside buttons
+- Files changed:
+  - packages/frontend/src/App.tsx: added handleZoomIn/handleZoomOut callbacks using the same scale-ratio pan adjustment as wheel handler but centered on viewport center
+  - packages/frontend/src/components/BottomPanel.tsx: replaced plain zoom percentage with capsule-shaped zoom control group containing minus button, percentage label, plus button
+  - packages/frontend/src/theme.ts: added zoomBg color to light and dark themes
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Zoom centered on viewport uses window.innerWidth/2 and window.innerHeight/2 as center point — same scale-ratio formula as mouse-centered wheel zoom
+  - Capsule zoom control uses borderRadius: '12px' on outer container with transparent button backgrounds that show hover via backgroundColor transition
+  - Zoom buttons use Unicode minus (−) instead of hyphen for visual consistency with plus sign

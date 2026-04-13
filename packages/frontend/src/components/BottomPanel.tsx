@@ -7,9 +7,11 @@ interface BottomPanelProps {
   wsStatus: 'connected' | 'disconnected' | 'reconnecting';
   scale: number;
   themeMode: ThemeMode;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
 }
 
-export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode }: BottomPanelProps) {
+export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode, onZoomIn, onZoomOut }: BottomPanelProps) {
   const theme = getThemeColors(themeMode);
   const [copied, setCopied] = useState(false);
 
@@ -123,10 +125,85 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
         {/* Divider */}
         <div style={{ width: '1px', height: '16px', backgroundColor: theme.divider }} />
 
-        {/* Zoom level */}
-        <span style={{ fontFamily: 'monospace', color: theme.textPrimary }}>
-          {Math.round(scale * 100)}%
-        </span>
+        {/* Zoom control capsule */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: theme.zoomBg,
+            borderRadius: '12px',
+            padding: '2px',
+            gap: '0px',
+          }}
+        >
+          <button
+            onClick={onZoomOut}
+            style={{
+              width: '24px',
+              height: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '10px',
+              backgroundColor: 'transparent',
+              color: theme.textPrimary,
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              lineHeight: 1,
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            −
+          </button>
+          <span
+            style={{
+              fontFamily: 'monospace',
+              color: theme.textPrimary,
+              fontSize: '11px',
+              padding: '0 6px',
+              minWidth: '42px',
+              textAlign: 'center',
+              userSelect: 'none',
+            }}
+          >
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            onClick={onZoomIn}
+            style={{
+              width: '24px',
+              height: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '10px',
+              backgroundColor: 'transparent',
+              color: theme.textPrimary,
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              lineHeight: 1,
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            +
+          </button>
+        </div>
       </div>
     </>
   );
