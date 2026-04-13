@@ -304,39 +304,6 @@ export default function UnifiedToolbar({
         >
           🖼
         </button>
-
-        {/* Clear Canvas button */}
-        <button
-          title="Clear Canvas"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClearCanvas();
-          }}
-          style={{
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid transparent',
-            borderRadius: '6px',
-            backgroundColor: theme.btnDefaultBg,
-            cursor: 'pointer',
-            fontSize: '16px',
-            color: theme.textSecondary,
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = '#fee2e2';
-            (e.target as HTMLElement).style.color = '#dc2626';
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
-            (e.target as HTMLElement).style.color = theme.textSecondary;
-          }}
-        >
-          🗑
-        </button>
       </div>
 
       {/* Row 2: Colors — Width — Style */}
@@ -550,6 +517,50 @@ export default function UnifiedToolbar({
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
           Save
+        </button>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '20px', backgroundColor: theme.divider }} />
+
+        {/* Clear Canvas button */}
+        <button
+          title="Clear Canvas"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClearCanvas();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '22px',
+            border: `1px solid ${theme.btnBorder}`,
+            borderRadius: '4px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '13px',
+            color: theme.textSecondary,
+            transition: 'all 0.15s ease',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#fee2e2';
+            (e.target as HTMLElement).style.color = '#dc2626';
+            (e.target as HTMLElement).style.borderColor = '#fca5a5';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+            (e.target as HTMLElement).style.color = theme.textSecondary;
+            (e.target as HTMLElement).style.borderColor = theme.btnBorder;
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
         </button>
       </div>
     </div>

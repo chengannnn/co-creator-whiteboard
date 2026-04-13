@@ -410,20 +410,18 @@ function WhiteboardRoom() {
     }
   }, [userName]);
 
-  // Clear canvas with confirmation
+  // Clear canvas (pushes current state to history for undo)
   const clearCanvas = useCallback(() => {
     if (shapes.length === 0) return;
-    if (window.confirm('Clear the entire canvas? This cannot be undone.')) {
-      setForwardHistory([]);
-      // Save current state to history before clearing
-      setHistory([...history, shapes]);
-      onShapesChange([]);
-      setSelectedIds([]);
-      // Broadcast all shape deletions
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        for (const shape of shapes) {
-          wsRef.current.send(JSON.stringify({ type: 'shape_delete', shapeId: shape.id }));
-        }
+    setForwardHistory([]);
+    // Save current state to history before clearing
+    setHistory([...history, shapes]);
+    onShapesChange([]);
+    setSelectedIds([]);
+    // Broadcast all shape deletions
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      for (const shape of shapes) {
+        wsRef.current.send(JSON.stringify({ type: 'shape_delete', shapeId: shape.id }));
       }
     }
   }, [shapes, history, onShapesChange]);

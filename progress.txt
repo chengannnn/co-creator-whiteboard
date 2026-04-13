@@ -450,3 +450,17 @@ Started: Sun Apr 12 16:08:46     2026
   - rough.js uses `strokeLineDash` (array) for dashed strokes, NOT `strokeStyle`
   - Module-level helper functions (like getShapeBounds) are stable references and don't cause re-render issues when used in hook dependency arrays
   - Offscreen canvas export works by creating a new canvas element, rendering shapes with rough.js, then using canvas.toBlob() for download
+
+---
+
+## [2026-04-13] - v2.1-clear
+- Implemented clear canvas with stable undo support
+- Features: moved trash icon button to UnifiedToolbar Row 2 (SVG trash icon), removed confirmation dialog, clears all shapes on click, pushes complete current state snapshot to history before clearing, Ctrl+Z restores pre-clear state, selectedIds reset to empty after clear, WebSocket broadcasts all shape deletions to other users
+- Files changed:
+  - packages/frontend/src/components/UnifiedToolbar.tsx: moved trash button from Row 1 to Row 2 (after Save button), replaced emoji with SVG trash icon, styled to match Row 2 compact button style
+  - packages/frontend/src/App.tsx: removed window.confirm() from clearCanvas function — now clears immediately without confirmation dialog
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - clearCanvas captures `shapes` via useCallback dependency — this snapshot is pushed to history, ensuring undo restores the exact pre-clear state
+  - Row 1 and Row 2 `<div>` containers in UnifiedToolbar must both be properly closed — removing a button from Row 1 also removed the closing `</div>` tag
+  - Forward history is cleared on clear (setForwardHistory([])) so redo isn't available after clearing — this is intentional since clearing starts a new action branch
