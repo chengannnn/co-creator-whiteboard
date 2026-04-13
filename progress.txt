@@ -13,6 +13,9 @@ Started: Sun Apr 12 16:08:46     2026
 - Pure utility functions used by `useCallback` may need `/* eslint-disable react-hooks/exhaustive-deps */` if they don't depend on component state — ESLint auto-fix wraps them in `useCallback` which can cause parse errors
 - Room state is managed in-memory on backend using `Map<string, Set<WebSocket>>` with cleanup timers
 - WebSocket connection established on room mount; roomId sent via `join_room` message
+- Use `forwardRef` + `useImperativeHandle` to expose child component methods (e.g., canvas export) to parent components
+- rough.js uses `strokeLineDash` (e.g., `[8, 6]`) for dashed strokes — NOT `strokeStyle`
+- Move pure helper functions to module level for stable references that don't trigger re-renders in hook dependency arrays
 
 ---
 
