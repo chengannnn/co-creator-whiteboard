@@ -493,3 +493,17 @@ Started: Sun Apr 12 16:08:46     2026
   - Zoom centered on viewport uses window.innerWidth/2 and window.innerHeight/2 as center point — same scale-ratio formula as mouse-centered wheel zoom
   - Capsule zoom control uses borderRadius: '12px' on outer container with transparent button backgrounds that show hover via backgroundColor transition
   - Zoom buttons use Unicode minus (−) instead of hyphen for visual consistency with plus sign
+
+## [2026-04-13] - v2.1-history
+- Implemented undo/redo buttons in bottom-right panel
+- Features: undo (left curved arrow) and redo (right curved arrow) buttons in capsule next to zoom controls, undo reverts to previous canvas state (disabled when history empty), redo restores after undo (cleared on new action), uses existing history/forwardHistory stacks, selectedIds cleared on undo/redo, matches existing Ctrl+Z/Ctrl+Y keyboard shortcuts
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: added forwardHistory/onForwardHistoryChange props, added redo useCallback function, exposed undo/redo via useImperativeHandle in CanvasComponentRef
+  - packages/frontend/src/App.tsx: added handleUndo/handleRedo callbacks via canvasRef, passed forwardHistory/onForwardHistoryChange to CanvasComponent, passed onUndo/onRedo/canUndo/canRedo to BottomPanel
+  - packages/frontend/src/components/BottomPanel.tsx: added onUndo/onRedo/canUndo/canRedo props, added undo/redo button capsule with SVG curved arrow icons before zoom controls, disabled state styling
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Redo function mirrors the Ctrl+Y handler in App.tsx — both push current shapes to history and pop from forwardHistory
+  - useImperativeHandle is used to expose undo/redo to parent so BottomPanel can trigger them without prop drilling through CanvasComponent
+  - Undo/redo buttons use the same capsule container style (zoomBg, borderRadius: '12px') as the zoom control for visual consistency
+  - Button disabled state uses theme.textMuted color and cursor: 'default' to clearly indicate non-interactivity
