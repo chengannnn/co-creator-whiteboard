@@ -464,3 +464,19 @@ Started: Sun Apr 12 16:08:46     2026
   - clearCanvas captures `shapes` via useCallback dependency — this snapshot is pushed to history, ensuring undo restores the exact pre-clear state
   - Row 1 and Row 2 `<div>` containers in UnifiedToolbar must both be properly closed — removing a button from Row 1 also removed the closing `</div>` tag
   - Forward history is cleared on clear (setForwardHistory([])) so redo isn't available after clearing — this is intentional since clearing starts a new action branch
+
+## [2026-04-13] - v2.1-theme
+- Implemented light/dark theme toggle
+- Features: sun/moon toggle buttons in UnifiedToolbar Row 2, light mode canvas background #FFFFFF, dark mode canvas background #121212, toolbar/panel/button/text colors adapt to theme, stroke colors inverted via render-time color mapping in dark mode (#000000 → #E0E0E0), PNG export background and stroke colors match current theme, theme state in App.tsx (not persisted, defaults to light)
+- Files changed:
+  - packages/frontend/src/theme.ts: replaced single `theme` export with `getThemeColors(mode)`, `getStrokeColor(color, mode)` functions and `ThemeMode` type. Added darkTheme palette with #121212 canvasBg and DARK_MODE_COLOR_MAP for stroke color inversion
+  - packages/frontend/src/App.tsx: added `themeMode` state (defaults to 'light'), passed to UnifiedToolbar, CanvasComponent, and BottomPanel
+  - packages/frontend/src/components/UnifiedToolbar.tsx: accepts `themeMode` and `onThemeChange` props, computes `theme` from `getThemeColors(themeMode)`, added sun (moon icon to switch to dark) and moon (sun icon to switch to light) toggle buttons in Row 2
+  - packages/frontend/src/components/CanvasComponent.tsx: accepts `themeMode` prop, uses `getStrokeColor(color, themeMode)` for all stroke colors in drawShape, preview drawing, and PNG export — ensures #000000 becomes #E0E0E0 in dark mode via render-time mapping
+  - packages/frontend/src/components/BottomPanel.tsx: accepts `themeMode` prop, computes `theme` from `getThemeColors(themeMode)`
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Stroke color inversion uses `getStrokeColor(color, themeMode)` — a pure function that maps dark colors to light variants at render time. Does NOT modify shape.style.strokeColor, keeping stored colors intact
+  - `theme` is computed via `getThemeColors(themeMode)` at component top level — all `theme.*` references automatically adapt without individual updates
+  - ESLint `react-hooks/exhaustive-deps` flags `theme.canvasBg` as missing dependency — since `theme` is derived from `themeMode`, add `themeMode` to deps and use `eslint-disable` comment for the `theme.*` false positives
+  - Preview drawing (handleMouseMove) also needs `getStrokeColor` for stroke colors — otherwise shape previews during drag will use light-mode colors in dark mode

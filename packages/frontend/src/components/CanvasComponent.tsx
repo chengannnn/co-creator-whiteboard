@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape, ArrowShape } from '../types/shapes';
-import { theme } from '../theme';
+import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 
 interface CanvasComponentProps {
   activeTool: ToolType;
@@ -24,6 +24,7 @@ interface CanvasComponentProps {
   onScaleChange: (scale: number) => void;
   eraserRadius: number;
   locked: boolean;
+  themeMode: ThemeMode;
 }
 
 type InteractionMode =
@@ -134,7 +135,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   onScaleChange,
   eraserRadius,
   locked,
+  themeMode,
 }: CanvasComponentProps, ref) {
+  const theme = getThemeColors(themeMode);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
@@ -301,15 +304,16 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       // Render all shapes
       for (const shape of allShapes) {
         const style = shape.style;
+        const strokeColor = getStrokeColor(style.strokeColor, themeMode);
         const fill = style.fillStyle === 'none' ? undefined : style.fillColor;
         const lineDash = style.strokeStyle === 'dashed' ? [8, 6] : undefined;
 
         switch (shape.type) {
           case 'rectangle':
-            rc.rectangle(shape.x, shape.y, shape.width, shape.height, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            rc.rectangle(shape.x, shape.y, shape.width, shape.height, { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
             break;
           case 'ellipse':
-            rc.ellipse(shape.x + shape.width / 2, shape.y + shape.height / 2, shape.width, shape.height, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            rc.ellipse(shape.x + shape.width / 2, shape.y + shape.height / 2, shape.width, shape.height, { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
             break;
           case 'rhombus':
             rc.polygon([
@@ -317,18 +321,18 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
               [shape.x + shape.width, shape.y + shape.height / 2],
               [shape.x + shape.width / 2, shape.y + shape.height],
               [shape.x, shape.y + shape.height / 2],
-            ], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
+            ], { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
             break;
           case 'line':
-            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
+            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
             break;
           case 'arrow': {
-            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: style.strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
+            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
             // Arrowhead
             const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
             const headSize = style.strokeWidth * 3;
             ctx.save();
-            ctx.fillStyle = style.strokeColor;
+            ctx.fillStyle = strokeColor;
             ctx.translate(shape.endX, shape.endY);
             ctx.rotate(angle);
             ctx.beginPath();
@@ -343,7 +347,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           case 'freehand':
             if (shape.points.length > 1) {
               const pts = shape.points.map((p) => [p.x, p.y] as [number, number]);
-              rc.linearPath(pts, { stroke: style.strokeColor, strokeWidth: style.strokeWidth, roughness: 0.5, strokeLineDash: lineDash });
+              rc.linearPath(pts, { stroke: strokeColor, strokeWidth: style.strokeWidth, roughness: 0.5, strokeLineDash: lineDash });
             }
             break;
           case 'image': {
@@ -355,7 +359,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           }
           case 'text':
             ctx.save();
-            ctx.fillStyle = style.strokeColor;
+            ctx.fillStyle = strokeColor;
             ctx.font = `${shape.fontSize}px sans-serif`;
             ctx.fillText(shape.content, shape.x, shape.y + shape.fontSize);
             ctx.restore();
@@ -392,15 +396,17 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         URL.revokeObjectURL(url);
       }, 'image/png');
     },
-  }), [shapes, userId, shapeOwners]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [shapes, userId, shapeOwners, themeMode]);
 
   const drawShape = (
     rc: RoughCanvas,
     shape: Shape,
   ) => {
     const style = shape.style ?? DEFAULT_STYLE;
+    const strokeColor = getStrokeColor(style.strokeColor, themeMode);
     const opts = {
-      stroke: style.strokeColor,
+      stroke: strokeColor,
       strokeWidth: style.strokeWidth,
       strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       fill: style.fillStyle === 'none' ? undefined : style.fillColor,
@@ -436,20 +442,20 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     } else if (shape.type === 'freehand') {
       if (shape.points.length > 1) {
         rc.linearPath(shape.points.map((p) => [p.x, p.y]), {
-          stroke: style.strokeColor,
+          stroke: strokeColor,
           strokeWidth: style.strokeWidth,
           strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
         });
       }
     } else if (shape.type === 'line') {
       rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], {
-        stroke: style.strokeColor,
+        stroke: strokeColor,
         strokeWidth: style.strokeWidth,
         strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       });
     } else if (shape.type === 'arrow') {
       rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], {
-        stroke: style.strokeColor,
+        stroke: strokeColor,
         strokeWidth: style.strokeWidth,
         strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       });
@@ -459,7 +465,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
         const arrowheadSize = style.strokeWidth * 3;
         ctx.save();
-        ctx.fillStyle = style.strokeColor;
+        ctx.fillStyle = strokeColor;
         ctx.translate(shape.endX, shape.endY);
         ctx.rotate(angle);
         ctx.beginPath();
@@ -474,7 +480,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx && shape.content) {
         ctx.font = `${shape.fontSize}px sans-serif`;
-        ctx.fillStyle = style.strokeColor;
+        ctx.fillStyle = strokeColor;
         ctx.textBaseline = 'top';
         ctx.fillText(shape.content, shape.x, shape.y);
 
@@ -600,7 +606,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform, eraserRadius]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform, eraserRadius, themeMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -813,7 +820,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       canvas.removeEventListener('wheel', handleWheel);
       if (zoomCommitTimer.current) clearTimeout(zoomCommitTimer.current);
     };
-  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, applyCanvasTransformFromRefs, commitZoomToState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, applyCanvasTransformFromRefs, commitZoomToState, themeMode]);
 
   // --- Shape hit detection ---
 
@@ -1120,7 +1128,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const rc = roughCanvasRef.current;
         if (rc && currentPoints.current.length > 1) {
           rc.linearPath(currentPoints.current.map((p) => [p.x, p.y]), {
-            stroke: defaultStyle.strokeColor,
+            stroke: getStrokeColor(getStrokeColor(defaultStyle.strokeColor, themeMode), themeMode),
             strokeWidth: defaultStyle.strokeWidth,
           });
         }
@@ -1138,12 +1146,12 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const baseTool = getBaseShapeTool(activeTool);
         if (baseTool === 'rectangle') {
           rc.rectangle(x, y, width, height, {
-            stroke: defaultStyle.strokeColor,
+            stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
             strokeWidth: defaultStyle.strokeWidth,
           });
         } else if (baseTool === 'ellipse') {
           rc.ellipse(x + width / 2, y + height / 2, width, height, {
-            stroke: defaultStyle.strokeColor,
+            stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
             strokeWidth: defaultStyle.strokeWidth,
           });
         } else if (baseTool === 'rhombus') {
@@ -1159,7 +1167,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
               [cx - hw, cy],
             ],
             {
-              stroke: defaultStyle.strokeColor,
+              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
               strokeWidth: defaultStyle.strokeWidth,
             },
           );
@@ -1167,7 +1175,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           rc.linearPath(
             [[start.x, start.y], [point.x, point.y]],
             {
-              stroke: defaultStyle.strokeColor,
+              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
               strokeWidth: defaultStyle.strokeWidth,
               strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
             },
@@ -1176,7 +1184,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           rc.linearPath(
             [[start.x, start.y], [point.x, point.y]],
             {
-              stroke: defaultStyle.strokeColor,
+              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
               strokeWidth: defaultStyle.strokeWidth,
               strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
             },
@@ -1187,7 +1195,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
             const angle = Math.atan2(point.y - start.y, point.x - start.x);
             const arrowheadSize = defaultStyle.strokeWidth * 3;
             ctx.save();
-            ctx.fillStyle = defaultStyle.strokeColor;
+            ctx.fillStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
             ctx.translate(point.x, point.y);
             ctx.rotate(angle);
             ctx.beginPath();

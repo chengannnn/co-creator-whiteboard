@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolType, FillStyle, StrokeWidth, StrokeStyle } from '../types/shapes';
-import { theme } from '../theme';
+import { getThemeColors, type ThemeMode } from '../theme';
 
 // Map strokeWidth values to eraser radius sizes
 const ERASER_RADIUS_MAP: Record<number, number> = { 1: 10, 2: 20, 4: 40 };
@@ -58,6 +58,8 @@ interface UnifiedToolbarProps {
   locked: boolean;
   onLockChange: (locked: boolean) => void;
   onSave: () => void;
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
 }
 
 export default function UnifiedToolbar({
@@ -75,7 +77,10 @@ export default function UnifiedToolbar({
   locked,
   onLockChange,
   onSave,
+  themeMode,
+  onThemeChange,
 }: UnifiedToolbarProps) {
+  const theme = getThemeColors(themeMode);
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef<{ x: number; y: number; toolbarX: number; toolbarY: number } | null>(null);
@@ -562,6 +567,84 @@ export default function UnifiedToolbar({
             <line x1="14" y1="11" x2="14" y2="17" />
           </svg>
         </button>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '20px', backgroundColor: theme.divider }} />
+
+        {/* Theme toggle buttons */}
+        {themeMode === 'light' ? (
+          <button
+            title="Switch to dark mode"
+            onClick={(e) => {
+              e.stopPropagation();
+              onThemeChange('dark');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '22px',
+              border: `1px solid ${theme.btnBorder}`,
+              borderRadius: '4px',
+              backgroundColor: theme.btnDefaultBg,
+              cursor: 'pointer',
+              color: theme.textSecondary,
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            title="Switch to light mode"
+            onClick={(e) => {
+              e.stopPropagation();
+              onThemeChange('light');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '22px',
+              border: `1px solid ${theme.btnBorder}`,
+              borderRadius: '4px',
+              backgroundColor: theme.btnDefaultBg,
+              cursor: 'pointer',
+              color: '#fbbf24',
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

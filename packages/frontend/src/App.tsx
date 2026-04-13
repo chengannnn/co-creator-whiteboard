@@ -4,6 +4,7 @@ import BottomPanel from './components/BottomPanel';
 import UnifiedToolbar from './components/UnifiedToolbar';
 import CanvasComponent, { CanvasComponentRef } from './components/CanvasComponent';
 import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape, StrokeWidth, StrokeStyle } from './types/shapes';
+import { ThemeMode } from './theme';
 
 interface RemoteCursor {
   userId: string;
@@ -53,6 +54,9 @@ function WhiteboardRoom() {
 
   // Canvas lock (no drawing/select/move, pan/zoom still work)
   const [locked, setLocked] = useState(false);
+
+  // Theme (light/dark, not persisted, defaults to light)
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
 
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<CanvasComponentRef>(null);
@@ -472,6 +476,8 @@ function WhiteboardRoom() {
         locked={locked}
         onLockChange={setLocked}
         onSave={handleExportPng}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
       />
       <CanvasComponent
         ref={canvasRef}
@@ -495,12 +501,14 @@ function WhiteboardRoom() {
         onScaleChange={setScale}
         eraserRadius={eraserRadius}
         locked={locked}
+        themeMode={themeMode}
       />
       <BottomPanel
         roomId={roomId ?? 'unknown'}
         userCount={userCount}
         wsStatus={wsStatus}
         scale={scale}
+        themeMode={themeMode}
       />
     </div>
   );

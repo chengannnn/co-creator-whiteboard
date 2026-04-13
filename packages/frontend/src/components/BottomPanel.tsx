@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { theme } from '../theme';
+import { getThemeColors, type ThemeMode } from '../theme';
 
 interface BottomPanelProps {
   roomId: string;
   userCount: number;
   wsStatus: 'connected' | 'disconnected' | 'reconnecting';
   scale: number;
+  themeMode: ThemeMode;
 }
 
-export default function BottomPanel({ roomId, userCount, wsStatus, scale }: BottomPanelProps) {
+export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode }: BottomPanelProps) {
+  const theme = getThemeColors(themeMode);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
