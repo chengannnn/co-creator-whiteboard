@@ -407,3 +407,28 @@ Started: Sun Apr 12 16:08:46     2026
   - Toolbar drag uses `calc(50% + ${toolbarPos.x}px)` for horizontal centering + offset pattern
   - Lock is a simple boolean gate in handleMouseDown that only allows panning mode to be set
   - Keyboard handlers (Delete, Ctrl+Z) also need lock checks since they bypass mouse handlers
+
+## [2026-04-13] - v2.1-bugfix-1
+- Verified shapes persistence after draw completion - all shape types (rectangle, ellipse, rhombus, line, arrow, freehand, image, text) correctly persist after mouseUp
+- Confirmed handleMouseUp creates newShape and pushes it into shapes array via pushHistory([...shapes, newShape])
+- Confirmed redrawCanvas is triggered after shapes state update (via useEffect on shapes dependency)
+- No code changes needed - implementation was already correct
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Shape persistence relies on pushHistory which calls onShapesChange with [...shapes, newShape] — the diff-based mutation detection in onShapesChange correctly identifies the new shape and broadcasts via WebSocket
+  - moveShapesRef is used for intermediate move/resize state; falls back to committed shapes state via `moveShapesRef.current ?? shapes` in redrawCanvas
+  - Image and text shapes use pushHistory from handleDoubleClick (text) and keyboard shortcut (image) rather than mouseUp
+
+## [2026-04-13] - v2.1-bugfix-2
+- Verified all tool buttons correctly activate their drawing modes
+- Confirmed all tool button onClick handlers call onToolChange (UnifiedToolbar line 234)
+- Confirmed CanvasComponent has branches for all tool types in handleMouseDown/handleMouseMove/handleMouseUp
+- Confirmed keyboard shortcuts: V/1=Select, R/2=Rectangle, O/3=Ellipse, D/Rhombus, L/4=Line, A=Arrow, P/5=Freehand, I=Image, X/7=Eraser
+- Eraser handled separately in handleMouseDown (line 893-901) and handleMouseUp (line 1231-1234)
+- No code changes needed - implementation was already correct
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Image tool is not a ToolType — it's handled via a separate keyboard shortcut (line 330-367) that opens a file picker
+  - Solid tool variants (rectangle-solid, ellipse-solid, rhombus-solid) use getBaseShapeTool() helper to map to base types for canvas drawing logic
+  - Eraser bypasses the standard drawing flow — it tracks points for pixel-level erasing via destination-out compositing, not shape creation
+---
