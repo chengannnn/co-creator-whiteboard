@@ -9,9 +9,13 @@ interface BottomPanelProps {
   themeMode: ThemeMode;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
-export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode, onZoomIn, onZoomOut }: BottomPanelProps) {
+export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode, onZoomIn, onZoomOut, onUndo, onRedo, canUndo, canRedo }: BottomPanelProps) {
   const theme = getThemeColors(themeMode);
   const [copied, setCopied] = useState(false);
 
@@ -120,6 +124,82 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
             }}
           />
           <span>{userCount}</span>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '16px', backgroundColor: theme.divider }} />
+
+        {/* Undo/Redo buttons */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: theme.zoomBg,
+            borderRadius: '12px',
+            padding: '2px',
+            gap: '0px',
+          }}
+        >
+          {/* Undo button */}
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            style={{
+              width: '24px',
+              height: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '10px',
+              backgroundColor: 'transparent',
+              color: canUndo ? theme.textPrimary : theme.textMuted,
+              cursor: canUndo ? 'pointer' : 'default',
+              fontSize: '14px',
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (canUndo) e.currentTarget.style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+          {/* Redo button */}
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            style={{
+              width: '24px',
+              height: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '10px',
+              backgroundColor: 'transparent',
+              color: canRedo ? theme.textPrimary : theme.textMuted,
+              cursor: canRedo ? 'pointer' : 'default',
+              fontSize: '14px',
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (canRedo) e.currentTarget.style.backgroundColor = theme.btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10" />
+            </svg>
+          </button>
         </div>
 
         {/* Divider */}

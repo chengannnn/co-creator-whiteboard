@@ -459,6 +459,15 @@ function WhiteboardRoom() {
     canvasRef.current?.exportPng();
   }, []);
 
+  // Undo/redo via canvas ref
+  const handleUndo = useCallback(() => {
+    canvasRef.current?.undo();
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    canvasRef.current?.redo();
+  }, []);
+
   // Zoom in/out centered on viewport center (25% step, 10%-500% range)
   const handleZoomIn = useCallback(() => {
     setScale((prev) => {
@@ -511,6 +520,8 @@ function WhiteboardRoom() {
         onShapesChange={onShapesChange}
         history={history}
         onHistoryChange={setHistory}
+        forwardHistory={forwardHistory}
+        onForwardHistoryChange={setForwardHistory}
         defaultStyle={defaultStyle}
         selectedIds={selectedIds}
         onSelectedIdsChange={setSelectedIds}
@@ -536,6 +547,10 @@ function WhiteboardRoom() {
         themeMode={themeMode}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={history.length > 0}
+        canRedo={forwardHistory.length > 0}
       />
     </div>
   );

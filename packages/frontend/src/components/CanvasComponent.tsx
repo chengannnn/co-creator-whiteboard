@@ -9,6 +9,8 @@ interface CanvasComponentProps {
   onShapesChange: (shapes: Shape[]) => void;
   history: Shape[][];
   onHistoryChange: (history: Shape[][]) => void;
+  forwardHistory: Shape[][];
+  onForwardHistoryChange: (forwardHistory: Shape[][]) => void;
   defaultStyle: ShapeStyle;
   selectedIds: string[];
   onSelectedIdsChange: (ids: string[]) => void;
@@ -112,6 +114,8 @@ function getShapeBounds(shape: Shape, canvasEl?: HTMLCanvasElement | null): { x:
 
 export interface CanvasComponentRef {
   exportPng: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function CanvasComponent({
@@ -120,6 +124,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   onShapesChange,
   history,
   onHistoryChange,
+  forwardHistory,
+  onForwardHistoryChange,
   defaultStyle,
   selectedIds,
   onSelectedIdsChange,
@@ -206,6 +212,15 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     onSelectedIdsChange([]);
   }, [history, onHistoryChange, onShapesChange, onSelectedIdsChange]);
 
+  const redo = useCallback(() => {
+    if (forwardHistory.length === 0) return;
+    const next = forwardHistory[forwardHistory.length - 1];
+    onForwardHistoryChange(forwardHistory.slice(0, -1));
+    onHistoryChange([...history, shapes]);
+    onShapesChange(next);
+    onSelectedIdsChange([]);
+  }, [forwardHistory, onForwardHistoryChange, history, shapes, onHistoryChange, onShapesChange, onSelectedIdsChange]);
+
   // --- Pan/Zoom helpers ---
 
   const MIN_ZOOM = 0.1;
@@ -265,7 +280,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     };
   }, []);
 
-  // Expose export function to parent via ref
+  // Expose export, undo, redo functions to parent via ref
   useImperativeHandle(ref, () => ({
     exportPng: () => {
       const allShapes = shapes;
@@ -396,6 +411,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         URL.revokeObjectURL(url);
       }, 'image/png');
     },
+    undo,
+    redo,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [shapes, userId, shapeOwners, themeMode]);
 
