@@ -165,6 +165,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, panX, panY]);
 
+  // Redraw all layers when theme changes (background color, stroke inversion, etc.)
+  useEffect(() => {
+    renderBackground();
+    renderStaticScene();
+    renderInteractive();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeMode]);
+
   // --- Scene helpers ---
 
   const undo = useCallback(() => {

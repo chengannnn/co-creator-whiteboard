@@ -232,7 +232,7 @@
         "Verify in browser: toggling theme updates all canvas layers instantly; all shapes remain clearly visible in both modes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

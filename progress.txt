@@ -679,3 +679,20 @@ Started: Sun Apr 12 16:08:46     2026
   - HistoryManager + Scene snapshot pattern is robust — no additional work needed for story 011
   - Ctrl+Z has a `locked` check in CanvasComponent while Ctrl+Y in App.tsx does not — this is existing behavior preserved per PRD requirement
 ---
+
+## [2026-04-14 14:45] - v2.1-refactor-012
+- Implemented theme toggle adaptation to new render pipeline
+- Changes:
+  - CanvasComponent.tsx: added useEffect that calls renderBackground() + renderStaticScene() + renderInteractive() when themeMode changes, ensuring all three canvas layers are redrawn when toggling between light/dark mode
+  - renderBackground() fills bg canvas with theme.canvasBg (#FFFFFF light, #121212 dark)
+  - renderStaticScene() re-renders all elements with getStrokeColor(color, themeMode) for dark mode stroke inversion
+  - renderInteractive() re-renders selection boxes, handles, and draft elements with theme-appropriate colors
+  - PNG export already uses theme.canvasBg and themeMode for correct export colors
+  - UnifiedToolbar theme toggle already updates AppState.themeMode via onThemeChange
+  - DARK_MODE_COLOR_MAP preserved for dark mode stroke color inversion
+- TypeScript strict mode and ESLint pass for frontend
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - The three-layer canvas requires explicit redraw of each layer — the zoom/pan useEffect only updated static + interactive layers, not background
+  - Adding a themeMode-specific useEffect ensures clean separation of concerns (zoom changes don't need background redraw, theme changes need all three layers)
+  - ESLint warnings about useCallback dependencies (drawShape, undo, redo) are pre-existing and not introduced by this change
