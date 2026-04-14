@@ -566,3 +566,15 @@ Started: Sun Apr 12 16:08:46     2026
   - drawShape now uses staticCanvasRef internally for elements needing raw canvas context (arrow, text, image) — callers only need to pass rc, element, themeMode
   - rough.js strokeLineDash expects number[] not readonly tuple — `[8, 6] as const` causes type errors, use plain `[8, 6]` with explicit opts type annotation
   - shapeToElement bridge function is still needed for backward compatibility during the gradual migration — will be removed once all Shape references are eliminated
+
+## [2026-04-14] - v2.1-refactor-006
+- Implemented unified pointer event pipeline to replace separate mouse handlers
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: replaced handleMouseDown/handleMouseMove/handleMouseUp with unified onPointerDown/onPointerMove/onPointerUp handlers. Added getWorldPoint(e) helper that converts pointer events to world coordinates using ref-based pan/scale values (no re-render). Added setPointerCapture/releasePointerCapture for reliable drag tracking when pointer moves outside canvas bounds. Added onPointerLeave handler for cursor presence cleanup. Canvas lock restriction now only allows panning (middle-click or space+drag), blocks all other tools. Selection tool hit-testing and resize handle detection integrated into onPointerDown. Pan mode tracks isPanning ref for proper state management.
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Pointer events (onPointerDown/onPointerMove/onPointerUp) replace mouse events for unified input handling (mouse, touch, pen)
+  - setPointerCapture ensures pointer events continue to be received even when cursor leaves the canvas during drag
+  - Using refs (panXRef, panYRef, scaleRef) for coordinate conversion in pointer handlers avoids stale closure issues and re-render performance costs
+  - CanvasComponent does not have wsRef — cursor broadcast logic must use the broadcastCursor prop, not direct WebSocket access
+---
