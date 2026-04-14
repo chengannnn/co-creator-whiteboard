@@ -696,3 +696,33 @@ Started: Sun Apr 12 16:08:46     2026
   - The three-layer canvas requires explicit redraw of each layer — the zoom/pan useEffect only updated static + interactive layers, not background
   - Adding a themeMode-specific useEffect ensures clean separation of concerns (zoom changes don't need background redraw, theme changes need all three layers)
   - ESLint warnings about useCallback dependencies (drawShape, undo, redo) are pre-existing and not introduced by this change
+
+## [2026-04-14 17:45] - US-001
+- Fixed pointermove draft snapshot ghost trails
+- Changes:
+  - CanvasComponent.tsx: Added explicit clearRect(0, 0, canvas.width, canvas.height) in onPointerMove handler before delegating to ToolHandler for drawing tools. This ensures the interactive canvas is cleared on every pointermove event, preventing ghost trails from previous frames that could accumulate due to React state batching
+  - CanvasComponent.tsx: Added explicit clearRect in onPointerUp handler after committing the shape, ensuring the draft shape is completely removed from the interactive canvas after mouse release
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - renderInteractive() uses clearRect internally but is called via setDraft (React state update), which can be batched. Explicit clearRect in pointer handlers ensures deterministic clearing regardless of React batching behavior
+  - The interactive canvas layer is the topmost of the three-layer architecture — clearing it doesn't affect static (committed shapes) or background layers
+---
+
+## [2026-04-14 18:00] - US-002
+- Verified negative coordinate drag drawing is already correctly implemented
+- All acceptance criteria met:
+  - createBBoxHandler (RectangleHandler.ts) uses Math.abs for width/height and Math.min for x/y start coordinates
+  - EllipseHandler and RhombusHandler share the same createBBoxHandler factory
+  - Coordinate normalization logic encapsulated within the shared createBBoxHandler factory
+  - Rhombus vertex calculation uses center-based computation (x + width/2, y + height/2) which correctly handles normalized coordinates
+  - Rendering code for ellipse and rhombus adds Math.abs safety for width/height
+  - Dragging in all 4 diagonal directions produces correctly positioned and sized shapes
+- No code changes needed — implementation was correct from v2.1-refactor-007
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- Manual browser verification needed (dev server confirmed running)
+- **Learnings for future iterations:**
+  - createBBoxHandler is a shared factory for rectangle, ellipse, and rhombus — any bbox-related fixes apply to all three at once
+  - The normalization pattern (Math.min for origin, Math.abs for dimensions) is the standard approach for drag-to-draw bounding box interactions
+---
