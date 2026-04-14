@@ -99,7 +99,7 @@
         "Verify in browser: all 8 element types render correctly on the static canvas"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -556,3 +556,13 @@ Started: Sun Apr 12 16:08:46     2026
   - Preview shapes during drag are drawn directly in handleMouseMove on the interactive canvas (not through renderInteractive) to avoid needing additional point-tracking refs
   - Panning uses ref-based transforms on all three layers for jitter-free rendering, with debounced state sync
 ---
+
+## [2026-04-14] - v2.1-refactor-005
+- Rewrote drawShape function to accept SceneElement + themeMode instead of old Shape type
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: rewritten drawShape(roughCanvas, element, themeMode) to handle all 8 SceneElement subtypes (rectangle, ellipse, rhombus, line, arrow, freehand, text, image). RectangleElement calls rc.rectangle with proper fill/stroke. EllipseElement calls rc.ellipse with center coordinates. RhombusElement calls rc.polygon with 4 diamond vertices. LineElement calls rc.linearPath with points array. ArrowElement calls rc.linearPath plus draws arrowhead(s) using raw canvas 2D (endArrowhead and startArrowhead support). FreehandElement calls rc.linearPath with roughness: 0.5 for freehand style. TextElement renders with native ctx.fillText including font, textAlign, verticalAlign, lineHeight, multi-line support. ImageElement draws from imageCacheRef or loads from src via ctx.drawImage. Stroke colors use getStrokeColor for dark mode inversion. Fill styles (none/solid/hatch) all supported. Reduced drawSceneElement to a thin wrapper calling drawShape. Updated all call sites (renderStaticScene, redrawCanvas, commitZoomToState) to convert Shape via shapeToElement before calling drawShape.
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - drawShape now uses staticCanvasRef internally for elements needing raw canvas context (arrow, text, image) — callers only need to pass rc, element, themeMode
+  - rough.js strokeLineDash expects number[] not readonly tuple — `[8, 6] as const` causes type errors, use plain `[8, 6]` with explicit opts type annotation
+  - shapeToElement bridge function is still needed for backward compatibility during the gradual migration — will be removed once all Shape references are eliminated
