@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ToolType, FillStyle, StrokeWidth, StrokeStyle } from '../types/shapes';
+import type { ToolType, FillStyle, StrokeWidth, StrokeStyle } from '../types/element';
 import { getThemeColors, type ThemeMode } from '../theme';
 
 // Map strokeWidth values to eraser radius sizes

@@ -3,7 +3,10 @@ import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import BottomPanel from './components/BottomPanel';
 import UnifiedToolbar from './components/UnifiedToolbar';
 import CanvasComponent, { CanvasComponentRef } from './components/CanvasComponent';
-import { ToolType, Shape, ShapeStyle, FillStyle, DEFAULT_STYLE, ImageShape, StrokeWidth, StrokeStyle } from './types/shapes';
+import { Scene } from './core/Scene';
+import { HistoryManager } from './core/HistoryManager';
+import type { SceneElement, StrokeWidth, StrokeStyle, FillStyle, ToolType } from './types/element';
+import { DEFAULT_STYLE } from './types/element';
 import { ThemeMode } from './theme';
 
 interface RemoteCursor {
@@ -23,10 +26,13 @@ const RECONNECT_MAX_DELAY = 5000;
 function WhiteboardRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const [activeTool, setActiveTool] = useState<ToolType>('rectangle');
-  const [shapes, setShapes] = useState<Shape[]>([]);
-  const [history, setHistory] = useState<Shape[][]>([]);
-  const [forwardHistory, setForwardHistory] = useState<Shape[][]>([]);
-  const [defaultStyle, setDefaultStyle] = useState<ShapeStyle>(DEFAULT_STYLE);
+  const [defaultStyle, setDefaultStyle] = useState({
+    strokeColor: DEFAULT_STYLE.strokeColor,
+    strokeWidth: DEFAULT_STYLE.strokeWidth,
+    strokeStyle: DEFAULT_STYLE.strokeStyle,
+    fillStyle: DEFAULT_STYLE.fillStyle,
+    fillColor: DEFAULT_STYLE.fillColor,
+  });
   const [unifiedColor, setUnifiedColor] = useState<string>(DEFAULT_STYLE.strokeColor);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [userCount, setUserCount] = useState(1);
@@ -37,7 +43,7 @@ function WhiteboardRoom() {
   const [userColor, setUserColor] = useState<string>('#3b82f6');
   const [userName, setUserName] = useState<string>('');
 
-  // Shape ownership: shapeId -> userId (for colored borders on others' shapes)
+  // Shape ownership: elementId -> userId
   const [shapeOwners, setShapeOwners] = useState<Map<string, string>>(new Map());
 
   // Remote cursors
@@ -58,20 +64,18 @@ function WhiteboardRoom() {
   // Theme (light/dark, not persisted, defaults to light)
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
 
+  // Scene and history (refs to avoid re-renders on every mutation)
+  const sceneRef = useRef<Scene>(new Scene());
+  const historyRef = useRef<HistoryManager>(new HistoryManager(sceneRef.current));
+
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<CanvasComponentRef>(null);
-  const shapesRef = useRef<Shape[]>([]);
   const userIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string>('#3b82f6');
-  const isRemoteUpdate = useRef(false);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs in sync
-  useEffect(() => {
-    shapesRef.current = shapes;
-  }, [shapes]);
-
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
@@ -80,8 +84,8 @@ function WhiteboardRoom() {
     userColorRef.current = userColor;
   }, [userColor]);
 
-  // Send shape mutation over WebSocket
-  const sendShapeMutation = useCallback((type: string, data: { shape?: Shape; shapeId?: string }) => {
+  // Send scene mutation over WebSocket
+  const sendSceneMutation = useCallback((type: string, data: { element?: SceneElement; elementId?: string; userId?: string }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type, ...data }));
     }
@@ -115,9 +119,11 @@ function WhiteboardRoom() {
             setUserColor(msg.color);
             setUserName(msg.name);
           } else if (msg.type === 'sync_state' && Array.isArray(msg.shapes)) {
-            setShapes(msg.shapes);
-            setHistory([]);
-            setForwardHistory([]);
+            // Convert legacy Shape[] to SceneElement[] for initial sync
+            // (server still sends Shape format, we convert client-side)
+            const scene = sceneRef.current;
+            scene.replaceAll(msg.shapes.map(shapeToElement));
+            historyRef.current.clear();
             setSelectedIds([]);
             const owners = new Map<string, string>();
             for (const s of msg.shapes) {
@@ -126,21 +132,21 @@ function WhiteboardRoom() {
             setShapeOwners(owners);
             setRemoteCursors(new Map());
           } else if (msg.type === 'shape_create' && msg.shape) {
-            isRemoteUpdate.current = true;
-            setShapes((prev) => [...prev, msg.shape]);
+            const scene = sceneRef.current;
+            const el = shapeToElement(msg.shape);
+            scene.addElement(el);
             setShapeOwners((prev) => {
               const next = new Map(prev);
-              next.set(msg.shape.id, msg.userId ?? '__unknown__');
+              next.set(el.id, msg.userId ?? '__unknown__');
               return next;
             });
           } else if (msg.type === 'shape_update' && msg.shape) {
-            isRemoteUpdate.current = true;
-            setShapes((prev) =>
-              prev.map((s) => (s.id === msg.shape.id ? msg.shape : s))
-            );
+            const scene = sceneRef.current;
+            const el = shapeToElement(msg.shape);
+            scene.updateElement(el.id, el as Partial<SceneElement>);
           } else if (msg.type === 'shape_delete' && msg.shapeId) {
-            isRemoteUpdate.current = true;
-            setShapes((prev) => prev.filter((s) => s.id !== msg.shapeId));
+            const scene = sceneRef.current;
+            scene.deleteElement(msg.shapeId);
             setSelectedIds((prev) => prev.filter((id) => id !== msg.shapeId));
             setShapeOwners((prev) => {
               const next = new Map(prev);
@@ -201,66 +207,74 @@ function WhiteboardRoom() {
     };
   }, [roomId]);
 
-  // Wrap onShapesChange to also broadcast mutations
-  const onShapesChange = useCallback(
-    (updater: Shape[] | ((prev: Shape[]) => Shape[])) => {
-      const prevShapes = shapesRef.current;
-      const nextShapes = typeof updater === 'function' ? updater(prevShapes) : updater;
+  // Called after each committed scene mutation from CanvasComponent.
+  // Triggers history push and WebSocket broadcast.
+  const onSceneMutate = useCallback((action: 'add' | 'update' | 'delete' | 'replaceAll' | 'clear') => {
+    const scene = sceneRef.current;
+    const elements = scene.getElements();
 
-      if (isRemoteUpdate.current) {
-        isRemoteUpdate.current = false;
-        setShapes(nextShapes);
-        return;
+    if (action === 'add') {
+      // The most recently added element
+      historyRef.current.push();
+      const lastEl = elements[elements.length - 1];
+      if (lastEl) {
+        sendSceneMutation('shape_create', { element: lastEl, userId: userIdRef.current ?? '__local__' });
+        setShapeOwners((prev) => {
+          const next = new Map(prev);
+          next.set(lastEl.id, userIdRef.current ?? '__local__');
+          return next;
+        });
       }
-
-      // Determine diff and broadcast
-      if (nextShapes.length > prevShapes.length) {
-        const newShape = nextShapes.find((s) => !prevShapes.some((p) => p.id === s.id));
-        if (newShape) {
-          sendShapeMutation('shape_create', { shape: newShape });
-          setShapeOwners((prev) => {
-            const next = new Map(prev);
-            next.set(newShape.id, userIdRef.current ?? '__local__');
-            return next;
-          });
-        }
-      } else if (nextShapes.length < prevShapes.length) {
-        const deletedId = prevShapes.find((s) => !nextShapes.some((p) => p.id === s.id))?.id;
-        if (deletedId) {
-          sendShapeMutation('shape_delete', { shapeId: deletedId });
-          setShapeOwners((prev) => {
-            const next = new Map(prev);
-            next.delete(deletedId);
-            return next;
-          });
-        }
-      } else {
-        for (let i = 0; i < nextShapes.length; i++) {
-          if (nextShapes[i] !== prevShapes[i]) {
-            sendShapeMutation('shape_update', { shape: nextShapes[i] });
-            break;
-          }
-        }
+    } else if (action === 'update') {
+      historyRef.current.push();
+      // Broadcast all updated elements
+      for (const el of elements) {
+        sendSceneMutation('shape_update', { element: el });
       }
+    } else if (action === 'delete') {
+      historyRef.current.push();
+      // Broadcast deleted elements
+      const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
+      for (const el of deletedElements) {
+        sendSceneMutation('shape_delete', { elementId: el.id });
+        setShapeOwners((prev) => {
+          const next = new Map(prev);
+          next.delete(el.id);
+          return next;
+        });
+      }
+    } else if (action === 'replaceAll') {
+      // undo/redo — no history push (already handled by HistoryManager)
+      // Broadcast full diff: check which elements were added/removed/modified
+      // For simplicity, broadcast all elements as updates
+      for (const el of elements) {
+        sendSceneMutation('shape_update', { element: el });
+      }
+    } else if (action === 'clear') {
+      historyRef.current.push();
+      // Broadcast all deletions
+      const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
+      for (const el of deletedElements) {
+        sendSceneMutation('shape_delete', { elementId: el.id });
+        setShapeOwners((prev) => {
+          const next = new Map(prev);
+          next.delete(el.id);
+          return next;
+        });
+      }
+    }
+  }, [sendSceneMutation]);
 
-      setShapes(nextShapes);
-    },
-    [sendShapeMutation]
-  );
+  // Called to apply intermediate move/resize results
+  const onMoveElements = useCallback((elements: SceneElement[]) => {
+    // Replace all elements in scene with the moved/resized versions
+    const scene = sceneRef.current;
+    scene.replaceAll(elements);
+  }, []);
 
-  // Unified toolbar: update selected shapes or set defaults for new shapes
+  // Unified toolbar: update style defaults
   const handleStyleChange = (patch: { strokeWidth?: StrokeWidth; strokeStyle?: StrokeStyle }) => {
-    setDefaultStyle((prev) => {
-      const next = { ...prev, ...patch };
-      if (selectedIds.length > 0) {
-        onShapesChange((prevShapes) =>
-          prevShapes.map((s) =>
-            selectedIds.includes(s.id) ? { ...s, style: { ...s.style, ...patch } } : s
-          )
-        );
-      }
-      return next;
-    });
+    setDefaultStyle((prev) => ({ ...prev, ...patch }));
   };
 
   // Toolbar: set fillStyle when clicking outline/solid shape buttons
@@ -272,33 +286,12 @@ function WhiteboardRoom() {
   const handleColorChange = (color: string) => {
     setUnifiedColor(color);
     setDefaultStyle((prev) => ({ ...prev, strokeColor: color, fillColor: color }));
-    if (selectedIds.length > 0) {
-      onShapesChange((prev) =>
-        prev.map((s) =>
-          selectedIds.includes(s.id)
-            ? { ...s, style: { ...s.style, strokeColor: color, fillColor: color } }
-            : s
-        )
-      );
-    }
   };
 
-  // Determine toolbar style state (selected shape or defaults)
+  // Determine toolbar style state
   const toolbarStyle = (() => {
-    const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
-    const s = selectedShape ? selectedShape.style : defaultStyle;
-    return { strokeWidth: s.strokeWidth, strokeStyle: s.strokeStyle };
+    return { strokeWidth: defaultStyle.strokeWidth, strokeStyle: defaultStyle.strokeStyle };
   })();
-
-  // Sync unifiedColor when selecting existing shapes
-  useEffect(() => {
-    const selectedShape = shapes.find((s) => selectedIds.includes(s.id));
-    if (selectedShape) {
-      setUnifiedColor(selectedShape.style.strokeColor);
-    } else {
-      setUnifiedColor(defaultStyle.strokeColor);
-    }
-  }, [selectedIds, shapes, defaultStyle.strokeColor]);
 
   // Keyboard shortcuts: tool switching, undo/redo, select all
   useEffect(() => {
@@ -347,20 +340,37 @@ function WhiteboardRoom() {
               img.onload = () => {
                 const defaultWidth = 200;
                 const aspectRatio = img.height / img.width;
-                const newShape: ImageShape = {
+                const now = Date.now();
+                const newEl: SceneElement = {
                   id: Math.random().toString(36).substring(2, 9),
                   type: 'image',
                   x: -panX / scale + 50,
                   y: -panY / scale + 50,
                   width: defaultWidth,
                   height: defaultWidth * aspectRatio,
+                  angle: 0,
+                  strokeColor: defaultStyle.strokeColor,
+                  strokeWidth: defaultStyle.strokeWidth,
+                  strokeStyle: defaultStyle.strokeStyle,
+                  fillStyle: defaultStyle.fillStyle,
+                  fillColor: defaultStyle.fillColor,
+                  roughness: 1,
+                  opacity: 1,
+                  version: 1,
+                  versionNonce: Math.floor(Math.random() * 1e9),
+                  isDeleted: false,
+                  groupIds: [],
+                  index: 0,
+                  updated: now,
+                  ownerId: userId ?? '',
+                  seed: Math.floor(Math.random() * 1e9),
                   src: evt.target!.result as string,
-                  style: { ...defaultStyle },
+                  fileId: null,
                 };
-                setForwardHistory([]);
-                setHistory((prev) => [...prev, shapes]);
-                onShapesChange([...shapes, newShape]);
-                setSelectedIds([newShape.id]);
+                sceneRef.current.addElement(newEl);
+                historyRef.current.push();
+                onSceneMutate('add');
+                setSelectedIds([newEl.id]);
               };
               img.src = evt.target.result as string;
             }
@@ -371,28 +381,23 @@ function WhiteboardRoom() {
         return;
       }
 
-      // Ctrl+Y redo
+      // Ctrl+Y redo (CanvasComponent handles this via ref)
       if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        if (forwardHistory.length === 0) return;
-        const next = forwardHistory[forwardHistory.length - 1];
-        setForwardHistory(forwardHistory.slice(0, -1));
-        setHistory([...history, shapes]);
-        setShapes(next);
-        setSelectedIds([]);
+        canvasRef.current?.redo();
       }
 
       // Ctrl+A select all
       if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        setSelectedIds(shapes.map((s) => s.id));
+        setSelectedIds(sceneRef.current.getElements().map((el) => el.id));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [forwardHistory, history, shapes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panX, panY, scale, defaultStyle, userId]);
 
   // Broadcast cursor position to other users (throttled to ~30fps)
   const broadcastCursor = useCallback((x: number, y: number, isDrawing: boolean) => {
@@ -414,45 +419,60 @@ function WhiteboardRoom() {
     }
   }, [userName]);
 
-  // Clear canvas (pushes current state to history for undo)
-  const clearCanvas = useCallback(() => {
-    if (shapes.length === 0) return;
-    setForwardHistory([]);
-    // Save current state to history before clearing
-    setHistory([...history, shapes]);
-    onShapesChange([]);
-    setSelectedIds([]);
-    // Broadcast all shape deletions
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      for (const shape of shapes) {
-        wsRef.current.send(JSON.stringify({ type: 'shape_delete', shapeId: shape.id }));
-      }
-    }
-  }, [shapes, history, onShapesChange]);
-
-  // Insert image from data URL
-  const handleImageInsert = (dataUrl: string) => {
+  // Clear canvas (pushes current state to history, then deletes all)
+  const insertImage = useCallback((dataUrl: string) => {
     const img = new Image();
     img.onload = () => {
       const defaultWidth = 200;
       const aspectRatio = img.height / img.width;
-      const newShape: ImageShape = {
+      const now = Date.now();
+      const newEl: SceneElement = {
         id: Math.random().toString(36).substring(2, 9),
         type: 'image',
         x: -panX / scale + 50,
         y: -panY / scale + 50,
         width: defaultWidth,
         height: defaultWidth * aspectRatio,
+        angle: 0,
+        strokeColor: defaultStyle.strokeColor,
+        strokeWidth: defaultStyle.strokeWidth,
+        strokeStyle: defaultStyle.strokeStyle,
+        fillStyle: defaultStyle.fillStyle,
+        fillColor: defaultStyle.fillColor,
+        roughness: 1,
+        opacity: 1,
+        version: 1,
+        versionNonce: Math.floor(Math.random() * 1e9),
+        isDeleted: false,
+        groupIds: [],
+        index: 0,
+        updated: now,
+        ownerId: userId ?? '',
+        seed: Math.floor(Math.random() * 1e9),
         src: dataUrl,
-        style: { ...defaultStyle },
+        fileId: null,
       };
-      setForwardHistory([]);
-      setHistory([...history, shapes]);
-      onShapesChange([...shapes, newShape]);
-      setSelectedIds([newShape.id]);
+      sceneRef.current.addElement(newEl);
+      historyRef.current.push();
+      onSceneMutate('add');
+      setSelectedIds([newEl.id]);
     };
     img.src = dataUrl;
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panX, panY, scale, defaultStyle, userId, onSceneMutate]);
+
+  // Clear canvas (pushes current state to history, then deletes all)
+  const clearCanvas = useCallback(() => {
+    const scene = sceneRef.current;
+    const elements = scene.getElements();
+    if (elements.length === 0) return;
+    historyRef.current.push();
+    for (const el of elements) {
+      scene.deleteElement(el.id);
+    }
+    onSceneMutate('clear');
+    setSelectedIds([]);
+  }, [onSceneMutate]);
 
   // Export canvas as PNG
   const handleExportPng = useCallback(() => {
@@ -468,8 +488,7 @@ function WhiteboardRoom() {
     canvasRef.current?.redo();
   }, []);
 
-  // Unified zoom control — single entry point for +/- buttons and programmatic zoom.
-  // Zoom center is the current viewport center; pan adjusts proportionally.
+  // Unified zoom control
   const setZoom = useCallback((newZoom: number) => {
     setScale((prev) => {
       const clamped = Math.min(5, Math.max(0.1, newZoom));
@@ -491,7 +510,7 @@ function WhiteboardRoom() {
         onColorChange={handleColorChange}
         unifiedColor={unifiedColor}
         onClearCanvas={clearCanvas}
-        onImageInsert={handleImageInsert}
+        onImageInsert={insertImage}
         style={toolbarStyle}
         onStyleChange={handleStyleChange}
         eraserRadius={eraserRadius}
@@ -504,13 +523,9 @@ function WhiteboardRoom() {
       />
       <CanvasComponent
         ref={canvasRef}
+        scene={sceneRef.current}
+        history={historyRef.current}
         activeTool={activeTool}
-        shapes={shapes}
-        onShapesChange={onShapesChange}
-        history={history}
-        onHistoryChange={setHistory}
-        forwardHistory={forwardHistory}
-        onForwardHistoryChange={setForwardHistory}
         defaultStyle={defaultStyle}
         selectedIds={selectedIds}
         onSelectedIdsChange={setSelectedIds}
@@ -527,6 +542,8 @@ function WhiteboardRoom() {
         eraserRadius={eraserRadius}
         locked={locked}
         themeMode={themeMode}
+        onSceneMutate={onSceneMutate}
+        onMoveElements={onMoveElements}
       />
       <BottomPanel
         roomId={roomId ?? 'unknown'}
@@ -537,11 +554,138 @@ function WhiteboardRoom() {
         onZoom={setZoom}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        canUndo={history.length > 0}
-        canRedo={forwardHistory.length > 0}
+        canUndo={historyRef.current.canUndo()}
+        canRedo={historyRef.current.canRedo()}
       />
     </div>
   );
+}
+
+/**
+ * Convert a legacy Shape object (from server sync) to SceneElement format.
+ * Used only for initial sync_state from server which still uses Shape format.
+ */
+function shapeToElement(shape: {
+  id: string;
+  type: string;
+  x?: number; y?: number;
+  width?: number; height?: number;
+  startX?: number; startY?: number;
+  endX?: number; endY?: number;
+  points?: { x: number; y: number }[];
+  content?: string; fontSize?: number;
+  src?: string;
+  style?: {
+    strokeColor: string;
+    strokeWidth: number;
+    strokeStyle: string;
+    fillStyle: string;
+    fillColor: string;
+  };
+  ownerId?: string;
+}): SceneElement {
+  const style = shape.style ?? DEFAULT_STYLE;
+  const now = Date.now();
+
+  const commonBase = {
+    id: shape.id,
+    angle: 0,
+    strokeColor: style.strokeColor,
+    strokeWidth: style.strokeWidth as StrokeWidth,
+    strokeStyle: style.strokeStyle as StrokeStyle,
+    fillStyle: style.fillStyle as FillStyle,
+    fillColor: style.fillColor,
+    roughness: 1,
+    opacity: 1,
+    version: 1,
+    versionNonce: Math.floor(Math.random() * 1e9),
+    isDeleted: false,
+    groupIds: [],
+    index: 0,
+    updated: now,
+    ownerId: shape.ownerId ?? '',
+    seed: Math.floor(Math.random() * 1e9),
+  };
+
+  switch (shape.type) {
+    case 'rectangle':
+      return { ...commonBase, type: 'rectangle', x: shape.x ?? 0, y: shape.y ?? 0, width: shape.width ?? 0, height: shape.height ?? 0 };
+    case 'ellipse':
+      return { ...commonBase, type: 'ellipse', x: shape.x ?? 0, y: shape.y ?? 0, width: shape.width ?? 0, height: shape.height ?? 0 };
+    case 'rhombus':
+      return { ...commonBase, type: 'rhombus', x: shape.x ?? 0, y: shape.y ?? 0, width: shape.width ?? 0, height: shape.height ?? 0 };
+    case 'freehand': {
+      const xs = shape.points?.map((p) => p.x) ?? [];
+      const ys = shape.points?.map((p) => p.y) ?? [];
+      return {
+        ...commonBase,
+        type: 'freehand',
+        x: xs.length ? Math.min(...xs) : 0,
+        y: ys.length ? Math.min(...ys) : 0,
+        width: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+        height: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+        points: shape.points ?? [],
+      };
+    }
+    case 'line':
+      return {
+        ...commonBase,
+        type: 'line',
+        x: shape.startX ?? 0,
+        y: shape.startY ?? 0,
+        width: Math.abs((shape.endX ?? 0) - (shape.startX ?? 0)),
+        height: Math.abs((shape.endY ?? 0) - (shape.startY ?? 0)),
+        points: [
+          { x: 0, y: 0 },
+          { x: (shape.endX ?? 0) - (shape.startX ?? 0), y: (shape.endY ?? 0) - (shape.startY ?? 0) },
+        ],
+        startArrowhead: null,
+        endArrowhead: null,
+      };
+    case 'arrow':
+      return {
+        ...commonBase,
+        type: 'arrow',
+        x: shape.startX ?? 0,
+        y: shape.startY ?? 0,
+        width: Math.abs((shape.endX ?? 0) - (shape.startX ?? 0)),
+        height: Math.abs((shape.endY ?? 0) - (shape.startY ?? 0)),
+        points: [
+          { x: 0, y: 0 },
+          { x: (shape.endX ?? 0) - (shape.startX ?? 0), y: (shape.endY ?? 0) - (shape.startY ?? 0) },
+        ],
+        startArrowhead: null,
+        endArrowhead: 'arrow',
+      };
+    case 'text':
+      return {
+        ...commonBase,
+        type: 'text',
+        x: shape.x ?? 0,
+        y: shape.y ?? 0,
+        width: shape.width ?? 0,
+        height: shape.height ?? 0,
+        content: shape.content ?? '',
+        fontSize: shape.fontSize ?? 20,
+        fontFamily: 'sans-serif',
+        textAlign: 'left',
+        verticalAlign: 'top',
+        lineHeight: 1.25,
+      };
+    case 'image':
+      return {
+        ...commonBase,
+        type: 'image',
+        x: shape.x ?? 0,
+        y: shape.y ?? 0,
+        width: shape.width ?? 0,
+        height: shape.height ?? 0,
+        src: shape.src ?? '',
+        fileId: null,
+      };
+    default:
+      throw new Error(`Unknown shape type: ${shape.type}`);
+  }
 }
 
 function App() {

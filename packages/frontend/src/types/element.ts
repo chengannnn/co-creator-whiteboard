@@ -17,6 +17,8 @@ export type ElementType =
   | 'text'
   | 'image';
 
+export type ToolType = 'select' | 'rectangle' | 'rectangle-solid' | 'ellipse' | 'ellipse-solid' | 'rhombus' | 'rhombus-solid' | 'line' | 'arrow' | 'freehand' | 'eraser';
+
 export interface BaseElement {
   id: string;
   type: ElementType;
@@ -123,3 +125,11 @@ export interface ToolHandler {
     commitElement: (element: SceneElement) => void,
   ): SceneElement | null;
 }
+
+export const DEFAULT_STYLE = {
+  strokeColor: '#000000',
+  strokeWidth: 2 as StrokeWidth,
+  strokeStyle: 'solid' as StrokeStyle,
+  fillStyle: 'none' as FillStyle,
+  fillColor: '#000000',
+};

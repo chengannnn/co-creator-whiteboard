@@ -1,5 +1,4 @@
-import type { Point } from '../../types/element';
-import type { Shape } from '../../types/shapes';
+import type { SceneElement, Point } from '../../types/element';
 
 export type SelectMode = 'idle' | 'hit' | 'moving' | 'resizing';
 
@@ -29,28 +28,22 @@ const HANDLE_SIZE = 8;
 const BBOX_PADDING = 6;
 
 /**
- * Compute bounding box of a shape in world coordinates (local copy to avoid circular dependency).
+ * Compute bounding box of a SceneElement in world coordinates.
  */
-function getShapeBounds(shape: Shape): { x: number; y: number; width: number; height: number } {
-  if (shape.type === 'freehand') {
-    const xs = shape.points.map((p) => p.x);
-    const ys = shape.points.map((p) => p.y);
+function getElementBounds(el: SceneElement): { x: number; y: number; width: number; height: number } {
+  if (el.type === 'freehand' || el.type === 'line' || el.type === 'arrow') {
+    const pts = el.points;
+    if (pts.length === 0) return { x: el.x, y: el.y, width: 0, height: 0 };
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
     return {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
+      x: el.x + Math.min(...xs),
+      y: el.y + Math.min(...ys),
       width: Math.max(...xs) - Math.min(...xs),
       height: Math.max(...ys) - Math.min(...ys),
     };
   }
-  if (shape.type === 'line' || shape.type === 'arrow') {
-    return {
-      x: Math.min(shape.startX, shape.endX),
-      y: Math.min(shape.startY, shape.endY),
-      width: Math.abs(shape.endX - shape.startX),
-      height: Math.abs(shape.endY - shape.startY),
-    };
-  }
-  return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+  return { x: el.x, y: el.y, width: el.width, height: el.height };
 }
 
 /**
@@ -59,24 +52,26 @@ function getShapeBounds(shape: Shape): { x: number; y: number; width: number; he
  * Unlike drawing handlers, this does not create new DraftElements.
  * Instead, it tracks the interaction state internally and communicates
  * via callbacks (onSelectionChange).
+ *
+ * Works with SceneElement (not legacy Shape types).
  */
 export function createSelectToolHandler(
-  getShapes: () => Shape[],
+  getElements: () => SceneElement[],
   getSelectedIds: () => string[],
   onSelectionChange: (ids: string[]) => void,
-  onMove: (shapes: Shape[]) => void,
+  onMove: (elements: SceneElement[]) => void,
   getScale: () => number,
 ): {
   onPointerDown: (worldX: number, worldY: number) => void;
   onPointerMove: (worldX: number, worldY: number) => void;
-  onPointerUp: () => Shape[] | null;
+  onPointerUp: () => SceneElement[] | null;
   getMode: () => SelectMode;
 } {
   const state: SelectState = createInitialState();
-  let moveShapes: Shape[] | null = null;
+  let moveElements: SceneElement[] | null = null;
 
-  function getBBox(shape: Shape) {
-    const b = getShapeBounds(shape);
+  function getBBox(el: SceneElement) {
+    const b = getElementBounds(el);
     return {
       x: b.x - BBOX_PADDING,
       y: b.y - BBOX_PADDING,
@@ -102,8 +97,8 @@ export function createSelectToolHandler(
   function hitTestHandles(point: Point): ResizeHandle | null {
     const primaryId = state.selectedId;
     if (!primaryId) return null;
-    const shapes = getShapes();
-    const selected = shapes.find((s) => s.id === primaryId);
+    const elements = getElements();
+    const selected = elements.find((el) => el.id === primaryId);
     if (!selected) return null;
     const bbox = getBBox(selected);
     const handles = getHandlePositions(bbox);
@@ -122,26 +117,24 @@ export function createSelectToolHandler(
     return null;
   }
 
-  function hitTestShapes(point: Point): Shape | null {
-    const shapes = getShapes();
-    for (let i = shapes.length - 1; i >= 0; i--) {
-      const shape = shapes[i];
-      const bounds = getShapeBounds(shape);
+  function hitTestElements(point: Point): SceneElement | null {
+    const elements = getElements();
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const el = elements[i];
+      const bounds = getElementBounds(el);
 
-      if (shape.type === 'freehand') {
+      if (el.type === 'freehand') {
         // Point-in-polygon approximation
-        const pts = shape.points;
+        const pts = el.points;
         let inside = false;
         for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
-          const xi = pts[j].x,
-            yi = pts[j].y;
-          const xk = pts[k].x,
-            yk = pts[k].y;
+          const xi = pts[j].x, yi = pts[j].y;
+          const xk = pts[k].x, yk = pts[k].y;
           if (yi > point.y !== yk > point.y && point.x < ((xk - xi) * (point.y - yi)) / (yk - yi) + xi) {
             inside = !inside;
           }
         }
-        if (inside) return shape;
+        if (inside) return el;
       } else {
         if (
           point.x >= bounds.x &&
@@ -149,7 +142,7 @@ export function createSelectToolHandler(
           point.y >= bounds.y &&
           point.y <= bounds.y + bounds.height
         ) {
-          return shape;
+          return el;
         }
       }
     }
@@ -157,12 +150,12 @@ export function createSelectToolHandler(
   }
 
   function applyResize(
-    shape: Shape,
+    el: SceneElement,
     handle: ResizeHandle,
     dx: number,
     dy: number,
-  ): Shape {
-    const bounds = getShapeBounds(shape);
+  ): SceneElement {
+    const bounds = getElementBounds(el);
     let { x, y, width, height } = bounds;
 
     switch (handle) {
@@ -211,28 +204,26 @@ export function createSelectToolHandler(
       height = 10;
     }
 
-    if (shape.type === 'freehand') {
-      const origBounds = getShapeBounds(shape);
+    if (el.type === 'freehand') {
+      const origBounds = getElementBounds(el);
       const offX = x - origBounds.x;
       const offY = y - origBounds.y;
       return {
-        ...shape,
-        points: shape.points.map((p) => ({ x: p.x + offX, y: p.y + offY })),
+        ...el,
+        points: el.points.map((p) => ({ x: p.x + offX, y: p.y + offY })),
       };
     }
-    if (shape.type === 'line' || shape.type === 'arrow') {
-      const origBounds = getShapeBounds(shape);
+    if (el.type === 'line' || el.type === 'arrow') {
+      const origBounds = getElementBounds(el);
       const offX = x - origBounds.x;
       const offY = y - origBounds.y;
       return {
-        ...shape,
-        startX: shape.startX + offX,
-        startY: shape.startY + offY,
-        endX: shape.endX + offX,
-        endY: shape.endY + offY,
+        ...el,
+        x: el.x + offX,
+        y: el.y + offY,
       };
     }
-    return { ...shape, x, y, width, height };
+    return { ...el, x, y, width, height };
   }
 
   return {
@@ -246,28 +237,28 @@ export function createSelectToolHandler(
       const primaryId = selectedIds[selectedIds.length - 1];
 
       if (handle && primaryId) {
-        const shapes = getShapes();
-        const shape = shapes.find((s) => s.id === primaryId);
-        if (shape) {
-          const bounds = getShapeBounds(shape);
+        const elements = getElements();
+        const el = elements.find((e) => e.id === primaryId);
+        if (el) {
+          const bounds = getElementBounds(el);
           state.resizeStartBounds = { ...bounds };
           state.activeHandle = handle;
           state.selectedId = primaryId;
           state.mode = 'resizing';
-          moveShapes = null;
+          moveElements = null;
         }
         return;
       }
 
-      // Check shape hit
-      const hitShape = hitTestShapes(point);
-      if (hitShape) {
-        onSelectionChange([hitShape.id]);
-        const bounds = getShapeBounds(hitShape);
+      // Check element hit
+      const hitEl = hitTestElements(point);
+      if (hitEl) {
+        onSelectionChange([hitEl.id]);
+        const bounds = getElementBounds(hitEl);
         state.moveOffset = { x: worldX - bounds.x, y: worldY - bounds.y };
-        state.selectedId = hitShape.id;
+        state.selectedId = hitEl.id;
         state.mode = 'moving';
-        moveShapes = null;
+        moveElements = null;
       } else {
         onSelectionChange([]);
         state.selectedId = null;
@@ -276,17 +267,17 @@ export function createSelectToolHandler(
     },
 
     onPointerMove(worldX: number, worldY: number): void {
-      const shapes = getShapes();
+      const elements = getElements();
 
       if (state.mode === 'moving' && state.selectedId) {
         const selectedIds = getSelectedIds();
         const selectedIdSet = new Set(selectedIds);
-        const currentShapes = moveShapes ?? shapes;
+        const currentElements = moveElements ?? elements;
 
-        const primaryShape = currentShapes.find((s) => s.id === state.selectedId);
-        if (!primaryShape) return;
+        const primaryEl = currentElements.find((el) => el.id === state.selectedId);
+        if (!primaryEl) return;
 
-        const bounds = getShapeBounds(primaryShape);
+        const bounds = getElementBounds(primaryEl);
         const newX = worldX - state.moveOffset.x;
         const newY = worldY - state.moveOffset.y;
         const dx = newX - bounds.x;
@@ -294,52 +285,44 @@ export function createSelectToolHandler(
 
         if (dx === 0 && dy === 0) return;
 
-        const newShapes = currentShapes.map((s) => {
-          if (!selectedIdSet.has(s.id)) return s;
-          if (s.type === 'freehand') {
+        const newElements = currentElements.map((el) => {
+          if (!selectedIdSet.has(el.id)) return el;
+          if (el.type === 'freehand') {
             return {
-              ...s,
-              points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+              ...el,
+              points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
             };
           }
-          if (s.type === 'line' || s.type === 'arrow') {
-            return {
-              ...s,
-              startX: s.startX + dx,
-              startY: s.startY + dy,
-              endX: s.endX + dx,
-              endY: s.endY + dy,
-            };
-          }
-          return { ...s, x: s.x + dx, y: s.y + dy };
+          // Line/arrow/other elements: move x/y
+          return { ...el, x: el.x + dx, y: el.y + dy };
         });
 
-        moveShapes = newShapes;
-        onMove(newShapes);
+        moveElements = newElements;
+        onMove(newElements);
         return;
       }
 
       if (state.mode === 'resizing' && state.selectedId && state.activeHandle) {
-        const currentShapes = moveShapes ?? shapes;
-        const shape = currentShapes.find((s) => s.id === state.selectedId);
-        if (!shape) return;
+        const currentElements = moveElements ?? elements;
+        const el = currentElements.find((e) => e.id === state.selectedId);
+        if (!el) return;
 
         const orig = state.resizeStartBounds;
-        const dx = worldX - (orig.x + (state.activeHandle!.includes('e') ? orig.width : 0));
-        const dy = worldY - (orig.y + (state.activeHandle!.includes('s') ? orig.height : 0));
+        const dx = worldX - (orig.x + (state.activeHandle.includes('e') ? orig.width : 0));
+        const dy = worldY - (orig.y + (state.activeHandle.includes('s') ? orig.height : 0));
 
-        const resized = applyResize(shape, state.activeHandle!, dx, dy);
-        const newShapes = currentShapes.map((s) => (s.id === state.selectedId ? resized : s));
+        const resized = applyResize(el, state.activeHandle, dx, dy);
+        const newElements = currentElements.map((e) => (e.id === state.selectedId ? resized : e));
 
-        moveShapes = newShapes;
-        onMove(newShapes);
+        moveElements = newElements;
+        onMove(newElements);
         return;
       }
     },
 
-    onPointerUp(): Shape[] | null {
-      const result = moveShapes;
-      moveShapes = null;
+    onPointerUp(): SceneElement[] | null {
+      const result = moveElements;
+      moveElements = null;
       state.mode = 'idle';
       state.activeHandle = null;
       return result;

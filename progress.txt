@@ -3,6 +3,12 @@ Started: Sun Apr 12 16:08:46     2026
 ---
 
 ## Codebase Patterns
+- Scene + HistoryManager are stored as refs (not React state) to avoid unnecessary re-renders; canvas redraw triggered directly after scene mutations
+- onSceneMutate callback pattern: CanvasComponent calls scene methods, then invokes onSceneMutate which handles history.push() + WebSocket broadcast in App.tsx
+- All canvas rendering uses scene.getElements() — never direct shape arrays
+- Move/resize uses moveElementsRef<SceneElement[]> for intermediate state, batch-updated via scene.updateElement() on pointer-up
+- shapeToElement bridge still needed for initial server sync (server sends legacy Shape format)
+- types/shapes.ts is DELETED — ToolType and DEFAULT_STYLE migrated to types/element.ts
 - Monorepo uses npm workspaces with packages/frontend and packages/backend
 - Backend uses ESM modules (`"type": "module"`) with tsx for development
 - Frontend uses Vite + React 19 + TypeScript strict mode
@@ -634,3 +640,21 @@ Started: Sun Apr 12 16:08:46     2026
   - The redraw trigger useEffect must be placed after ref sync effects so refs are already updated when redraw reads current transform values
   - setZoom uses functional state updater for scale to avoid stale closure issues, but reads scale directly in handleZoomIn/handleZoomOut — fine for button clicks since each click gets the latest state value
 ---
+
+## [2026-04-14] - v2.1-refactor-010
+- Implemented Scene as single source of truth with React as view layer
+- Changes:
+  - App.tsx: replaced shapes/onShapesChange/history/forwardHistory state with Scene + HistoryManager refs. Scene ref (sceneRef) and HistoryManager ref (historyRef) are the authoritative data sources. React state only used for UI display (selectedIds, userCount, etc.). onSceneMutate callback handles history push + WebSocket broadcast after each scene mutation. insertImage function creates SceneElement directly and adds to scene.
+  - CanvasComponent.tsx: replaced shapes prop with scene: Scene and history: HistoryManager props. Removed onShapesChange/onHistoryChange/onForwardHistoryChange props. Added onSceneMutate callback and onMoveElements callback. All rendering uses scene.getElements() instead of shapes array. commitElement calls scene.addElement() + history.push() + onSceneMutate('add'). Undo/redo uses HistoryManager undo()/redo() which calls scene.replaceAll(). Move/resize operations use moveElementsRef<SceneElement[]> for intermediate state, committed via scene.updateElement() on pointer-up. Deleted key handler calls scene.deleteElement(). Text editing uses scene.updateElement(). Double-click text creation uses scene.addElement(). Removed shapeToElement bridge function — elements are already SceneElement. Removed shape-based hit testing, replaced with SceneElement-based hitTestElements(). SelectToolHandler integration removed — selection/move/resize handled inline using scene methods. Three-layer canvas rendering (background, static, interactive) unchanged. Eraser pixel logic unchanged. Remote cursors unchanged. Pan/zoom unchanged.
+  - SelectToolHandler.ts: rewritten to use SceneElement instead of Shape. getShapeBounds renamed to getElementBounds, operates on SceneElement. applyResize works with SceneElement (line/arrow elements move x/y rather than startX/startY/endX/endY). onMove callback returns SceneElement[] instead of Shape[].
+  - types/element.ts: added ToolType union type and DEFAULT_STYLE constant (migrated from shapes.ts).
+  - types/shapes.ts: DELETED. All Shape type references removed from codebase. UnifiedToolbar imports ToolType/FillStyle/StrokeWidth/StrokeStyle from element.ts. App.tsx imports ToolType/DEFAULT_STYLE from element.ts.
+  - WebSocket handlers: remote shape_create calls scene.addElement() + shapeToElement conversion (for legacy server format). Remote shape_update calls scene.updateElement(). Remote shape_delete calls scene.deleteElement(). sync_state uses scene.replaceAll() with shapeToElement conversion.
+- TypeScript strict mode and ESLint pass for frontend
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - Scene + HistoryManager as refs avoids unnecessary React re-renders on every mutation — canvas redraw is triggered directly via renderStaticScene()/renderInteractive() after scene changes
+  - shapeToElement conversion is still needed for initial server sync (server still sends legacy Shape format) — this bridge can be removed once the backend is updated to use SceneElement format
+  - The onSceneMutate callback pattern cleanly separates CanvasComponent's rendering concerns from App.tsx's history + WebSocket concerns
+  - Move/resize operations track intermediate SceneElement[] in moveElementsRef, then batch-update the scene on pointer-up via scene.updateElement() for each modified element
+  - Deleting types/shapes.ts removes ~117 lines of legacy code; ToolType and DEFAULT_STYLE were migrated to element.ts to avoid duplicating type definitions

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
-import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape, ArrowShape } from '../types/shapes';
-import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType } from '../types/element';
+import { Scene } from '../core/Scene';
+import { HistoryManager } from '../core/HistoryManager';
+import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 import {
   createBBoxHandler,
@@ -10,62 +11,15 @@ import {
   EraserHandler,
 } from '../core/tools';
 
-interface CanvasComponentProps {
-  activeTool: ToolType;
-  shapes: Shape[];
-  onShapesChange: (shapes: Shape[]) => void;
-  history: Shape[][];
-  onHistoryChange: (history: Shape[][]) => void;
-  forwardHistory: Shape[][];
-  onForwardHistoryChange: (forwardHistory: Shape[][]) => void;
-  defaultStyle: ShapeStyle;
-  selectedIds: string[];
-  onSelectedIdsChange: (ids: string[]) => void;
-  userId: string | null;
-  shapeOwners: Map<string, string>;
-  remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string; isDrawing: boolean }>;
-  broadcastCursor: (x: number, y: number, isDrawing: boolean) => void;
-  panX: number;
-  panY: number;
-  scale: number;
-  onPanXChange: (panX: number) => void;
-  onPanYChange: (panY: number) => void;
-  onScaleChange: (scale: number) => void;
-  eraserRadius: number;
-  locked: boolean;
-  themeMode: ThemeMode;
-}
-
-type InteractionMode =
-  | 'idle'
-  | 'drawing'
-  | 'selecting'
-  | 'moving'
-  | 'resizing'
-  | 'panning';
-
-type ResizeHandle =
-  | 'nw'
-  | 'ne'
-  | 'sw'
-  | 'se'
-  | 'n'
-  | 's'
-  | 'e'
-  | 'w';
-
-const HANDLE_SIZE = 8;
-const BBOX_PADDING = 6;
-
 // Map solid tool variants to base shape types for drawing/hit-testing logic
-const getBaseShapeTool = (tool: ToolType): ToolType => {
+const getBaseShapeTool = (tool: string): string => {
   if (tool === 'rectangle-solid') return 'rectangle';
   if (tool === 'ellipse-solid') return 'ellipse';
   if (tool === 'rhombus-solid') return 'rhombus';
   return tool;
 };
 
-// Map hex colors to readable names for cursor labels (must match App.tsx mapping)
+// Map hex colors to readable names for cursor labels
 const HEX_TO_COLOR_NAME: Record<string, string> = {
   '#ef4444': 'Red',
   '#f97316': 'Orange',
@@ -81,43 +35,8 @@ const HEX_TO_COLOR_NAME: Record<string, string> = {
   '#84cc16': 'Lime',
 };
 
-// Compute bounding box of a shape in world coordinates
-function getShapeBounds(shape: Shape, canvasEl?: HTMLCanvasElement | null): { x: number; y: number; width: number; height: number } {
-  if (shape.type === 'freehand') {
-    const xs = shape.points.map((p) => p.x);
-    const ys = shape.points.map((p) => p.y);
-    return {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys),
-    };
-  }
-  if (shape.type === 'line' || shape.type === 'arrow') {
-    return {
-      x: Math.min(shape.startX, shape.endX),
-      y: Math.min(shape.startY, shape.endY),
-      width: Math.abs(shape.endX - shape.startX),
-      height: Math.abs(shape.endY - shape.startY),
-    };
-  }
-  // Text shapes: measure content if width is 0 (newly created)
-  if (shape.type === 'text' && shape.width === 0 && shape.height === 0) {
-    const ctx = canvasEl?.getContext('2d');
-    if (ctx && shape.content) {
-      ctx.font = `${shape.fontSize}px sans-serif`;
-      const metrics = ctx.measureText(shape.content);
-      return {
-        x: shape.x,
-        y: shape.y,
-        width: Math.ceil(metrics.width),
-        height: shape.fontSize,
-      };
-    }
-    return { x: shape.x, y: shape.y, width: 100, height: shape.fontSize };
-  }
-  return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
-}
+const HANDLE_SIZE = 8;
+const BBOX_PADDING = 6;
 
 export interface CanvasComponentRef {
   exportPng: () => void;
@@ -125,15 +44,41 @@ export interface CanvasComponentRef {
   redo: () => void;
 }
 
+interface CanvasComponentProps {
+  scene: Scene;
+  history: HistoryManager;
+  selectedIds: string[];
+  onSelectedIdsChange: (ids: string[]) => void;
+  userId: string | null;
+  shapeOwners: Map<string, string>;
+  remoteCursors: Map<string, { userId: string; x: number; y: number; color: string; name: string; isDrawing: boolean }>;
+  broadcastCursor: (x: number, y: number, isDrawing: boolean) => void;
+  panX: number;
+  panY: number;
+  scale: number;
+  onPanXChange: (panX: number) => void;
+  onPanYChange: (panY: number) => void;
+  onScaleChange: (scale: number) => void;
+  eraserRadius: number;
+  locked: boolean;
+  themeMode: ThemeMode;
+  activeTool: string;
+  defaultStyle: {
+    strokeColor: string;
+    strokeWidth: StrokeWidth;
+    strokeStyle: 'solid' | 'dashed';
+    fillStyle: 'none' | 'solid' | 'hatch';
+    fillColor: string;
+  };
+  /** Called after each committed scene mutation. Triggers history + WebSocket broadcast. */
+  onSceneMutate: (action: 'add' | 'update' | 'delete' | 'replaceAll' | 'clear') => void;
+  /** Called to apply intermediate move/resize results (updates scene + triggers mutate) */
+  onMoveElements: (elements: SceneElement[]) => void;
+}
+
 export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function CanvasComponent({
-  activeTool,
-  shapes,
-  onShapesChange,
+  scene,
   history,
-  onHistoryChange,
-  forwardHistory,
-  onForwardHistoryChange,
-  defaultStyle,
   selectedIds,
   onSelectedIdsChange,
   userId,
@@ -149,25 +94,22 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   eraserRadius,
   locked,
   themeMode,
+  activeTool,
+  defaultStyle,
+  onSceneMutate,
+  onMoveElements,
 }: CanvasComponentProps, ref) {
   const theme = getThemeColors(themeMode);
-  // Three-layer canvas architecture
+  // Three-layer canvas references
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
-  const startPoint = useRef<Point>({ x: 0, y: 0 });
 
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>('idle');
-  const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
-  const moveOffset = useRef<Point>({ x: 0, y: 0 });
-  const resizeStartBounds = useRef<{ x: number; y: number; width: number; height: number }>({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
+  // Interaction state
+  const [interactionMode, setInteractionMode] = useState<'idle' | 'drawing' | 'selecting' | 'moving' | 'resizing' | 'panning'>('idle');
+  const [activeHandle, setActiveHandle] = useState<'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
 
   // Inline text editing state
   const [editingText, setEditingText] = useState<{
@@ -179,7 +121,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   } | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Pan/zoom interaction refs
+  // Pan/zoom refs
   const spacePressed = useRef(false);
   const isMiddleButton = useRef(false);
   const isPanning = useRef(false);
@@ -189,10 +131,17 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const panYRef = useRef(0);
   const zoomCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Intermediate shapes during move/resize — avoids React state mutations on every mouseMove
-  const moveShapesRef = useRef<Shape[] | null>(null);
+  // Intermediate elements during move/resize
+  const moveElementsRef = useRef<SceneElement[] | null>(null);
+  const moveOffset = useRef<Point>({ x: 0, y: 0 });
+  const resizeStartBounds = useRef<{ x: number; y: number; width: number; height: number }>({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
 
-  // Image cache: src -> HTMLImageElement (avoids reloading images on every redraw)
+  // Image cache
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
   // Pixel-based eraser state
@@ -208,40 +157,33 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   useEffect(() => { panXRef.current = panX; }, [panX]);
   useEffect(() => { panYRef.current = panY; }, [panY]);
-  useEffect(() => { if (!moveShapesRef.current) moveShapesRef.current = shapes; }, [shapes]);
 
-  // Redraw all layers when zoom/pan state changes (e.g., from +/- button clicks).
-  // Wheel zoom handles its own immediate redraw via refs; this catches state-driven updates.
+  // Redraw all layers when zoom/pan state changes
   useEffect(() => {
     renderStaticScene();
     renderInteractive();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, panX, panY]);
 
-  const pushHistory = useCallback(
-    (newShapes: Shape[]) => {
-      onHistoryChange([...history, shapes]);
-      onShapesChange(newShapes);
-    },
-    [history, shapes, onHistoryChange, onShapesChange]
-  );
+  // --- Scene helpers ---
 
   const undo = useCallback(() => {
-    if (history.length === 0) return;
-    const previous = history[history.length - 1];
-    onHistoryChange(history.slice(0, -1));
-    onShapesChange(previous);
-    onSelectedIdsChange([]);
-  }, [history, onHistoryChange, onShapesChange, onSelectedIdsChange]);
+    if (history.undo()) {
+      onSelectedIdsChange([]);
+      renderStaticScene();
+      renderInteractive();
+      onSceneMutate('replaceAll');
+    }
+  }, [history, onSelectedIdsChange, onSceneMutate]);
 
   const redo = useCallback(() => {
-    if (forwardHistory.length === 0) return;
-    const next = forwardHistory[forwardHistory.length - 1];
-    onForwardHistoryChange(forwardHistory.slice(0, -1));
-    onHistoryChange([...history, shapes]);
-    onShapesChange(next);
-    onSelectedIdsChange([]);
-  }, [forwardHistory, onForwardHistoryChange, history, shapes, onHistoryChange, onShapesChange, onSelectedIdsChange]);
+    if (history.redo()) {
+      onSelectedIdsChange([]);
+      renderStaticScene();
+      renderInteractive();
+      onSceneMutate('replaceAll');
+    }
+  }, [history, onSceneMutate]);
 
   // --- Pan/Zoom helpers ---
 
@@ -249,17 +191,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const MAX_ZOOM = 5;
   const ZOOM_FACTOR = 0.08;
 
-  const screenToWorld = useCallback(
-    (screenX: number, screenY: number): Point => {
-      return {
-        x: (screenX - panX) / scale,
-        y: (screenY - panY) / scale,
-      };
-    },
-    [panX, panY, scale]
-  );
-
-  // Apply pan/scale transform to canvas context (uses React state)
   const applyCanvasTransform = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       ctx.setTransform(scale, 0, 0, scale, panX, panY);
@@ -267,7 +198,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     [panX, panY, scale]
   );
 
-  // Apply pan/scale transform using ref values (for panning without re-renders)
   const applyCanvasTransformFromRefs = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       ctx.setTransform(scaleRef.current, 0, 0, scaleRef.current, panXRef.current, panYRef.current);
@@ -275,11 +205,33 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     []
   );
 
-  // --- Helper functions (must be before redrawCanvas) ---
+  // --- Helper functions (must be before redraw functions) ---
 
-  const getBBox = useCallback((shape: Shape | null) => {
-    if (!shape) return null;
-    const b = getShapeBounds(shape);
+  /**
+   * Compute bounding box of a SceneElement in world coordinates.
+   */
+  function getElementBounds(el: SceneElement): { x: number; y: number; width: number; height: number } {
+    if (el.type === 'freehand' || el.type === 'line' || el.type === 'arrow') {
+      const pts = el.points;
+      if (pts.length === 0) return { x: el.x, y: el.y, width: 0, height: 0 };
+      const xs = pts.map((p) => p.x);
+      const ys = pts.map((p) => p.y);
+      return {
+        x: el.x + Math.min(...xs),
+        y: el.y + Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      };
+    }
+    if (el.type === 'text' && el.width === 0 && el.height === 0) {
+      return { x: el.x, y: el.y, width: 100, height: el.fontSize };
+    }
+    return { x: el.x, y: el.y, width: el.width, height: el.height };
+  }
+
+  const getBBox = useCallback((el: SceneElement | null) => {
+    if (!el) return null;
+    const b = getElementBounds(el);
     return {
       x: b.x - BBOX_PADDING,
       y: b.y - BBOX_PADDING,
@@ -305,13 +257,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // Expose export, undo, redo functions to parent via ref
   useImperativeHandle(ref, () => ({
     exportPng: () => {
-      const allShapes = shapes;
-      if (allShapes.length === 0) return;
+      const elements = scene.getElements();
+      if (elements.length === 0) return;
 
-      // Compute minimum bounding box of all shapes
+      // Compute minimum bounding box of all elements
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const shape of allShapes) {
-        const bounds = getShapeBounds(shape);
+      for (const el of elements) {
+        const bounds = getElementBounds(el);
         minX = Math.min(minX, bounds.x);
         minY = Math.min(minY, bounds.y);
         maxX = Math.max(maxX, bounds.x + bounds.width);
@@ -338,77 +290,16 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       // Apply transform: shift content so minX-padding maps to 0
       ctx.setTransform(1, 0, 0, 1, -minX + padding, -minY + padding);
 
-      // Render all shapes
-      for (const shape of allShapes) {
-        const style = shape.style;
-        const strokeColor = getStrokeColor(style.strokeColor, themeMode);
-        const fill = style.fillStyle === 'none' ? undefined : style.fillColor;
-        const lineDash = style.strokeStyle === 'dashed' ? [8, 6] : undefined;
-
-        switch (shape.type) {
-          case 'rectangle':
-            rc.rectangle(shape.x, shape.y, shape.width, shape.height, { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
-            break;
-          case 'ellipse':
-            rc.ellipse(shape.x + shape.width / 2, shape.y + shape.height / 2, shape.width, shape.height, { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
-            break;
-          case 'rhombus':
-            rc.polygon([
-              [shape.x + shape.width / 2, shape.y],
-              [shape.x + shape.width, shape.y + shape.height / 2],
-              [shape.x + shape.width / 2, shape.y + shape.height],
-              [shape.x, shape.y + shape.height / 2],
-            ], { stroke: strokeColor, strokeWidth: style.strokeWidth, fill, strokeLineDash: lineDash });
-            break;
-          case 'line':
-            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
-            break;
-          case 'arrow': {
-            rc.linearPath([[shape.startX, shape.startY], [shape.endX, shape.endY]], { stroke: strokeColor, strokeWidth: style.strokeWidth, strokeLineDash: lineDash });
-            // Arrowhead
-            const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
-            const headSize = style.strokeWidth * 3;
-            ctx.save();
-            ctx.fillStyle = strokeColor;
-            ctx.translate(shape.endX, shape.endY);
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(-headSize, -headSize / 2);
-            ctx.lineTo(-headSize, headSize / 2);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-            break;
-          }
-          case 'freehand':
-            if (shape.points.length > 1) {
-              const pts = shape.points.map((p) => [p.x, p.y] as [number, number]);
-              rc.linearPath(pts, { stroke: strokeColor, strokeWidth: style.strokeWidth, roughness: 0.5, strokeLineDash: lineDash });
-            }
-            break;
-          case 'image': {
-            const img = imageCacheRef.current.get(shape.src);
-            if (img && img.complete && img.naturalWidth > 0) {
-              ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
-            }
-            break;
-          }
-          case 'text':
-            ctx.save();
-            ctx.fillStyle = strokeColor;
-            ctx.font = `${shape.fontSize}px sans-serif`;
-            ctx.fillText(shape.content, shape.x, shape.y + shape.fontSize);
-            ctx.restore();
-            break;
-        }
+      // Render all elements
+      for (const el of elements) {
+        drawShape(rc, el, themeMode);
       }
 
-      // Draw colored borders on remote shapes
-      for (const shape of allShapes) {
-        const ownerId = shapeOwners.get(shape.id);
+      // Draw colored borders on remote elements
+      for (const el of elements) {
+        const ownerId = shapeOwners.get(el.id);
         if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
-          const bounds = getShapeBounds(shape);
+          const bounds = getElementBounds(el);
           const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
           ctx.save();
           ctx.strokeStyle = borderColor;
@@ -436,7 +327,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     undo,
     redo,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [shapes, userId, shapeOwners, themeMode]);
+  }), [scene, userId, shapeOwners, themeMode, undo, redo]);
+
+  // --- drawShape: render a SceneElement using roughjs ---
 
   const drawShape = (
     rc: RoughCanvas,
@@ -622,159 +515,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
   };
 
-  /**
-   * Convert a legacy Shape object to SceneElement format.
-   * Transitional helper — will be removed once the component fully migrates to SceneElement.
-   */
-  function shapeToElement(shape: Shape): SceneElement {
-    const style = shape.style ?? DEFAULT_STYLE;
-    const now = Date.now();
-
-    const commonBase = {
-      id: shape.id,
-      angle: 0,
-      strokeColor: style.strokeColor,
-      strokeWidth: style.strokeWidth,
-      strokeStyle: style.strokeStyle,
-      fillStyle: style.fillStyle,
-      fillColor: style.fillColor,
-      roughness: 1,
-      opacity: 1,
-      version: 1,
-      versionNonce: Math.floor(Math.random() * 1e9),
-      isDeleted: false,
-      groupIds: [],
-      index: 0,
-      updated: now,
-      ownerId: shape.ownerId ?? '',
-      seed: Math.floor(Math.random() * 1e9),
-    };
-
-    switch (shape.type) {
-      case 'rectangle':
-        return { ...commonBase, type: 'rectangle', x: shape.x, y: shape.y, width: shape.width, height: shape.height };
-      case 'ellipse':
-        return { ...commonBase, type: 'ellipse', x: shape.x, y: shape.y, width: shape.width, height: shape.height };
-      case 'rhombus':
-        return { ...commonBase, type: 'rhombus', x: shape.x, y: shape.y, width: shape.width, height: shape.height };
-      case 'freehand': {
-        const xs = shape.points.map((p) => p.x);
-        const ys = shape.points.map((p) => p.y);
-        return {
-          ...commonBase,
-          type: 'freehand',
-          x: Math.min(...xs),
-          y: Math.min(...ys),
-          width: Math.max(...xs) - Math.min(...xs),
-          height: Math.max(...ys) - Math.min(...ys),
-          points: shape.points,
-        };
-      }
-      case 'line':
-        return {
-          ...commonBase,
-          type: 'line',
-          x: shape.startX,
-          y: shape.startY,
-          width: Math.abs(shape.endX - shape.startX),
-          height: Math.abs(shape.endY - shape.startY),
-          points: [
-            { x: 0, y: 0 },
-            { x: shape.endX - shape.startX, y: shape.endY - shape.startY },
-          ],
-          startArrowhead: null,
-          endArrowhead: null,
-        };
-      case 'arrow':
-        return {
-          ...commonBase,
-          type: 'arrow',
-          x: shape.startX,
-          y: shape.startY,
-          width: Math.abs(shape.endX - shape.startX),
-          height: Math.abs(shape.endY - shape.startY),
-          points: [
-            { x: 0, y: 0 },
-            { x: shape.endX - shape.startX, y: shape.endY - shape.startY },
-          ],
-          startArrowhead: null,
-          endArrowhead: 'arrow' as const,
-        };
-      case 'text':
-        return {
-          ...commonBase,
-          type: 'text',
-          x: shape.x,
-          y: shape.y,
-          width: shape.width,
-          height: shape.height,
-          content: shape.content,
-          fontSize: shape.fontSize,
-          fontFamily: 'sans-serif',
-          textAlign: 'left',
-          verticalAlign: 'top',
-          lineHeight: 1.25,
-        };
-      case 'image':
-        return {
-          ...commonBase,
-          type: 'image',
-          x: shape.x,
-          y: shape.y,
-          width: shape.width,
-          height: shape.height,
-          src: shape.src,
-          fileId: null,
-        };
-      default:
-        throw new Error(`Unknown shape type: ${(shape as Shape & { type: string }).type}`);
-    }
-  }
-
-
-  /**
-   * Compute bounding box of a SceneElement in world coordinates.
-   */
-  function getElementBounds(el: SceneElement): { x: number; y: number; width: number; height: number } {
-    if (el.type === 'freehand' || el.type === 'line' || el.type === 'arrow') {
-      const points = el.points;
-      if (points.length === 0) return { x: el.x, y: el.y, width: 0, height: 0 };
-      const xs = points.map((p) => p.x);
-      const ys = points.map((p) => p.y);
-      return {
-        x: el.x + Math.min(...xs),
-        y: el.y + Math.min(...ys),
-        width: Math.max(...xs) - Math.min(...xs),
-        height: Math.max(...ys) - Math.min(...ys),
-      };
-    }
-    // Text elements: measure content if width is 0
-    if (el.type === 'text' && el.width === 0 && el.height === 0) {
-      return { x: el.x, y: el.y, width: 100, height: el.fontSize };
-    }
-    return { x: el.x, y: el.y, width: el.width, height: el.height };
-  }
-
-  /**
-   * Draw a SceneElement using roughjs for the Static canvas layer.
-   * Replaces the old drawShape function for committed elements.
-   */
-  /**
-   * Thin wrapper around drawShape for backward compatibility.
-   * drawShape now accepts SceneElement directly.
-   */
-  const drawSceneElement = (
-    rc: RoughCanvas,
-    el: SceneElement,
-    _ctx: CanvasRenderingContext2D,
-    themeMode: ThemeMode,
-  ) => {
-    drawShape(rc, el, themeMode);
-  };
-
   // --- Three-layer canvas rendering ---
 
-  // Layer 0: Background — fills with theme canvas background color
+  // Layer 0: Background
   const renderBackground = useCallback(() => {
     const canvas = bgCanvasRef.current;
     if (!canvas) return;
@@ -796,15 +539,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     ctx.save();
     applyCanvasTransform(ctx);
 
-    for (const shape of shapes) {
-      const el = shapeToElement(shape);
-      drawSceneElement(rc, el, ctx, themeMode);
+    const elements = scene.getElements();
+    for (const el of elements) {
+      drawShape(rc, el, themeMode);
     }
 
-    // Draw colored borders on remote shapes (attribution)
-    for (const shape of shapes) {
-      const el = shapeToElement(shape);
-      const ownerId = shapeOwners.get(shape.id);
+    // Draw colored borders on remote elements (attribution)
+    for (const el of elements) {
+      const ownerId = shapeOwners.get(el.id);
       if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
         const bounds = getElementBounds(el);
         const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
@@ -819,7 +561,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     ctx.restore();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, applyCanvasTransform, shapeOwners, userId, scale]);
+  }, [scene, applyCanvasTransform, shapeOwners, userId, scale, themeMode]);
 
   // Layer 2: Interactive — renders draft elements, selection, resize handles, remote cursors
   const renderInteractive = useCallback(() => {
@@ -832,7 +574,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     ctx.save();
     applyCanvasTransform(ctx);
 
-    // Draw draft element if drawing (uses draft from ToolHandler)
+    // Draw draft element if drawing
     if (interactionMode === 'drawing' && draftRef.current) {
       const rc = roughCanvasRef.current;
       if (rc) {
@@ -867,13 +609,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     // Draw selection bounding boxes and resize handles
+    const elements = scene.getElements();
     for (const selId of selectedIds) {
-      const shape = shapes.find((s) => s.id === selId);
-      if (!shape) continue;
-      const bbox = getBBox(shape);
+      const el = elements.find((e) => e.id === selId);
+      if (!el) continue;
+      const bbox = getBBox(el);
       if (!bbox) continue;
 
-      const ownerId = shapeOwners.get(shape.id);
+      const ownerId = shapeOwners.get(el.id);
       const isRemote = ownerId && ownerId !== userId;
       ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
       ctx.lineWidth = 1.5 / scale;
@@ -894,15 +637,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-  }, [interactionMode, activeTool, selectedIds, shapes, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, renderStaticScene, applyCanvasTransform, drawShape]);
+  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, applyCanvasTransform, drawShape]);
 
-  // Master redraw — redraws static and interactive layers
+  // Master redraw
   const redrawCanvas = useCallback(() => {
     renderStaticScene();
     renderInteractive();
   }, [renderStaticScene, renderInteractive]);
 
-  // Full redraw including background
   const redrawAll = useCallback(() => {
     renderBackground();
     renderStaticScene();
@@ -911,17 +653,11 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
   // --- ToolHandler integration ---
 
-  /**
-   * Set the current draft element and trigger interactive canvas redraw.
-   */
   const setDraft = useCallback((draft: DraftElement | null) => {
     draftRef.current = draft;
     renderInteractive();
   }, [renderInteractive]);
 
-  /**
-   * Create a ToolHandler for the given tool type with the current defaultStyle.
-   */
   const createDrawingHandler = useCallback((): ToolHandlerType => {
     const style = {
       strokeColor: defaultStyle.strokeColor,
@@ -950,123 +686,18 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   }, [activeTool, defaultStyle]);
 
   /**
-   * Commit a SceneElement to the shapes state.
-   * Converts SceneElement back to Shape format for backward compatibility.
+   * Commit a SceneElement to the scene. Adds to scene, pushes history, triggers redraw.
    */
   const commitElement = useCallback((el: SceneElement) => {
-    let newShape: Shape | null = null;
+    scene.addElement(el);
+    history.push();
+    onSceneMutate('add');
+    onSelectedIdsChange([el.id]);
+    renderStaticScene();
+    renderInteractive();
+  }, [scene, history, onSceneMutate, onSelectedIdsChange, renderStaticScene, renderInteractive]);
 
-    switch (el.type) {
-      case 'rectangle':
-        newShape = {
-          id: el.id,
-          type: 'rectangle',
-          x: el.x,
-          y: el.y,
-          width: el.width,
-          height: el.height,
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        };
-        break;
-      case 'ellipse':
-        newShape = {
-          id: el.id,
-          type: 'ellipse',
-          x: el.x,
-          y: el.y,
-          width: el.width,
-          height: el.height,
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        };
-        break;
-      case 'rhombus':
-        newShape = {
-          id: el.id,
-          type: 'rhombus',
-          x: el.x,
-          y: el.y,
-          width: el.width,
-          height: el.height,
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        } as RhombusShape;
-        break;
-      case 'line': {
-        const pts = el.points;
-        newShape = {
-          id: el.id,
-          type: 'line',
-          startX: el.x + (pts[0]?.x ?? 0),
-          startY: el.y + (pts[0]?.y ?? 0),
-          endX: el.x + (pts[1]?.x ?? 0),
-          endY: el.y + (pts[1]?.y ?? 0),
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        } as LineShape;
-        break;
-      }
-      case 'arrow': {
-        const pts = el.points;
-        newShape = {
-          id: el.id,
-          type: 'arrow',
-          startX: el.x + (pts[0]?.x ?? 0),
-          startY: el.y + (pts[0]?.y ?? 0),
-          endX: el.x + (pts[1]?.x ?? 0),
-          endY: el.y + (pts[1]?.y ?? 0),
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        } as ArrowShape;
-        break;
-      }
-      case 'freehand':
-        newShape = {
-          id: el.id,
-          type: 'freehand',
-          points: el.points.map((p) => ({ x: p.x + el.x, y: p.y + el.y })),
-          style: {
-            strokeColor: el.strokeColor,
-            strokeWidth: el.strokeWidth,
-            strokeStyle: el.strokeStyle,
-            fillStyle: el.fillStyle,
-            fillColor: el.fillColor,
-          },
-        };
-        break;
-    }
-
-    if (newShape) {
-      pushHistory([...shapes, newShape]);
-      onSelectedIdsChange([newShape.id]);
-    }
-  }, [shapes, pushHistory, onSelectedIdsChange]);
+  // --- Canvas setup ---
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
@@ -1092,9 +723,11 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     return () => window.removeEventListener('resize', resizeCanvases);
   }, [redrawAll]);
 
+  // Redraw when scene changes (e.g., from remote updates or undo/redo)
   useEffect(() => {
-    redrawCanvas();
-  }, [shapes, selectedIds, redrawCanvas, scale]);
+    renderStaticScene();
+    renderInteractive();
+  }, [scene, selectedIds, scale, renderStaticScene, renderInteractive]);
 
   // --- Keyboard handlers ---
 
@@ -1112,9 +745,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        const selectedIdSet = new Set(selectedIds);
-        pushHistory(shapes.filter((s) => !selectedIdSet.has(s.id)));
+        history.push();
+        for (const id of selectedIds) {
+          scene.deleteElement(id);
+        }
+        onSceneMutate('delete');
         onSelectedIdsChange([]);
+        renderStaticScene();
       }
 
       if (e.key === 'Escape') {
@@ -1124,9 +761,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, shapes, undo, pushHistory, onSelectedIdsChange, locked]);
+  }, [selectedIds, scene, history, undo, onSceneMutate, onSelectedIdsChange, locked, renderStaticScene]);
 
-  // Track space key state for pan modifier
+  // Track space key state
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ' && e.target === document.body) {
@@ -1175,10 +812,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingText, shapes]);
+  }, [editingText]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // --- Wheel handler for zoom (uses refs to avoid re-renders during zoom) ---
+  // --- Wheel handler for zoom ---
 
   const commitZoomToState = useCallback(() => {
     onScaleChange(scaleRef.current);
@@ -1206,53 +843,46 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const newPanX = mouseX - (mouseX - currentPanX) * scaleRatio;
       const newPanY = mouseY - (mouseY - currentPanY) * scaleRatio;
 
-      // Update refs immediately for jitter-free rendering
       scaleRef.current = newScale;
       panXRef.current = newPanX;
       panYRef.current = newPanY;
 
-      // Redraw immediately with ref-based transform
+      // Redraw all layers with ref-based transform
       const roughCanvas = roughCanvasRef.current;
       if (!roughCanvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const activeShapes = moveShapesRef.current ?? shapes;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = theme.canvasBg;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      applyCanvasTransformFromRefs(ctx);
-
-      for (const shape of activeShapes) {
-        drawShape(roughCanvas, shapeToElement(shape), themeMode);
-      }
-
-      // Draw colored borders on remote shapes
-      for (const shape of activeShapes) {
-        const ownerId = shapeOwners.get(shape.id);
-        if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
-          const bounds = getShapeBounds(shape);
-          const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
-          ctx.save();
-          ctx.strokeStyle = borderColor;
-          ctx.lineWidth = 2 / newScale;
-          ctx.setLineDash([]);
-          ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
-          ctx.restore();
+      // Clear and redraw static layer
+      const staticCanvas = staticCanvasRef.current;
+      if (staticCanvas) {
+        const staticCtx = staticCanvas.getContext('2d');
+        if (staticCtx) {
+          staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+          staticCtx.save();
+          applyCanvasTransformFromRefs(staticCtx);
+          const elements = scene.getElements();
+          for (const el of elements) {
+            drawShape(roughCanvas, el, themeMode);
+          }
+          staticCtx.restore();
         }
       }
 
-      // Draw selection bounding boxes
+      // Clear and redraw interactive layer
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      applyCanvasTransformFromRefs(ctx);
+
+      // Selection bounding boxes
+      const elements = scene.getElements();
       for (const selId of selectedIds) {
-        const shape = activeShapes.find((s) => s.id === selId);
-        if (!shape) continue;
-        const bbox = getBBox(shape);
+        const el = elements.find((e) => e.id === selId);
+        if (!el) continue;
+        const bbox = getBBox(el);
         if (!bbox) continue;
 
-        const ownerId = shapeOwners.get(shape.id);
+        const ownerId = shapeOwners.get(el.id);
         const isRemote = ownerId && ownerId !== userId;
         ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
         ctx.lineWidth = 1.5 / newScale;
@@ -1274,8 +904,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       ctx.restore();
 
-      // Update remote cursors position (they use scale/pan from props)
-      // Debounce state sync — commit after zoom pauses
+      // Debounce state sync
       if (zoomCommitTimer.current) clearTimeout(zoomCommitTimer.current);
       zoomCommitTimer.current = setTimeout(() => {
         commitZoomToState();
@@ -1288,19 +917,18 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       if (zoomCommitTimer.current) clearTimeout(zoomCommitTimer.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, applyCanvasTransformFromRefs, commitZoomToState, themeMode]);
+  }, [selectedIds, getBBox, getHandlePositions, userId, shapeOwners, applyCanvasTransformFromRefs, commitZoomToState, themeMode, scene]);
 
-  // --- Shape hit detection ---
+  // --- Scene hit detection ---
 
-  const hitTestShapes = (point: Point): Shape | null => {
-    // Test in reverse order (top-most first)
-    for (let i = shapes.length - 1; i >= 0; i--) {
-      const shape = shapes[i];
-      const bounds = getShapeBounds(shape);
+  const hitTestElements = (point: Point): SceneElement | null => {
+    const elements = scene.getElements();
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const el = elements[i];
+      const bounds = getElementBounds(el);
 
-      if (shape.type === 'freehand') {
-        // Point-in-polygon approximation for freehand
-        if (isPointInFreehand(shape, point)) return shape;
+      if (el.type === 'freehand') {
+        if (isPointInFreehand(el, point)) return el;
       } else {
         if (
           point.x >= bounds.x &&
@@ -1308,21 +936,19 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           point.y >= bounds.y &&
           point.y <= bounds.y + bounds.height
         ) {
-          return shape;
+          return el;
         }
-      }    }
+      }
+    }
     return null;
   };
 
-  const isPointInFreehand = (shape: { points: Point[] }, point: Point): boolean => {
-    // Ray casting algorithm
-    const pts = shape.points;
+  const isPointInFreehand = (el: { points: Point[] }, point: Point): boolean => {
+    const pts = el.points;
     let inside = false;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      const xi = pts[i].x,
-        yi = pts[i].y;
-      const xj = pts[j].x,
-        yj = pts[j].y;
+      const xi = pts[i].x, yi = pts[i].y;
+      const xj = pts[j].x, yj = pts[j].y;
       if (yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi) {
         inside = !inside;
       }
@@ -1332,12 +958,12 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
   // --- Resize handle hit detection ---
 
-  const hitTestHandles = (point: Point): ResizeHandle | null => {
+  const hitTestHandles = (point: Point): 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null => {
     const primaryId = selectedIds[selectedIds.length - 1];
     if (!primaryId) return null;
-    const selected = shapes.find((s) => s.id === primaryId);
-    if (!selected) return null;
-    const bbox = getBBox(selected);
+    const el = scene.getElement(primaryId);
+    if (!el) return null;
+    const bbox = getBBox(el);
     if (!bbox) return null;
     const handles = getHandlePositions(bbox);
     const scaledHandleSize = HANDLE_SIZE / scale;
@@ -1349,27 +975,57 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         point.y >= pos.y &&
         point.y <= pos.y + scaledHandleSize
       ) {
-        return handle as ResizeHandle;
+        return handle as 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w';
       }
     }
     return null;
   };
 
-  // --- Mouse event helpers ---
+  // --- Resize helper ---
 
-  const getCanvasPoint = (e: React.MouseEvent): Point => {
-    const canvas = interactiveCanvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    return screenToWorld(screenX, screenY);
+  const applyResize = (
+    el: SceneElement,
+    handle: 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w',
+    dx: number,
+    dy: number,
+  ): SceneElement => {
+    const bounds = getElementBounds(el);
+    let { x, y, width, height } = bounds;
+
+    switch (handle) {
+      case 'se': width += dx; height += dy; break;
+      case 'sw': x += dx; width -= dx; height += dy; break;
+      case 'ne': width += dx; y += dy; height -= dy; break;
+      case 'nw': x += dx; y += dy; width -= dx; height -= dy; break;
+      case 'n': y += dy; height -= dy; break;
+      case 's': height += dy; break;
+      case 'e': width += dx; break;
+      case 'w': x += dx; width -= dx; break;
+    }
+
+    if (width < 10) { x -= 10 - width; width = 10; }
+    if (height < 10) { y -= 10 - height; height = 10; }
+
+    if (el.type === 'freehand') {
+      const origBounds = getElementBounds(el);
+      const offX = x - origBounds.x;
+      const offY = y - origBounds.y;
+      return {
+        ...el,
+        points: el.points.map((p) => ({ x: p.x + offX, y: p.y + offY })),
+      };
+    }
+    if (el.type === 'line' || el.type === 'arrow') {
+      const origBounds = getElementBounds(el);
+      const offX = x - origBounds.x;
+      const offY = y - origBounds.y;
+      return { ...el, x: el.x + offX, y: el.y + offY };
+    }
+    return { ...el, x, y, width, height };
   };
 
-  /**
-   * Convert pointer event to world coordinates using refs (no re-render).
-   * Used by unified pointer event pipeline for consistent coordinate mapping.
-   */
+  // --- Pointer event coordinate conversion ---
+
   const getWorldPoint = (e: React.PointerEvent): Point => {
     const canvas = interactiveCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -1381,6 +1037,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       y: (screenY - panYRef.current) / scaleRef.current,
     };
   };
+
+  // --- Text editing ---
 
   const finishEditing = () => {
     if (!editingText) return;
@@ -1395,127 +1053,42 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         width = Math.ceil(metrics.width);
         height = editingText.fontSize;
       }
-      onShapesChange(
-        shapes.map((s) =>
-          s.id === shapeId
-            ? { ...s, content: content.trim(), width, height }
-            : s
-        )
-      );
+      history.push();
+      scene.updateElement(shapeId, { content: content.trim(), width, height });
+      onSceneMutate('update');
+      renderStaticScene();
     } else {
       // Remove empty text shapes
-      pushHistory(shapes.filter((s) => s.id !== shapeId));
+      history.push();
+      scene.deleteElement(shapeId);
+      onSceneMutate('delete');
+      renderStaticScene();
     }
     setEditingText(null);
   };
 
   const cancelEditing = () => {
     if (!editingText) return;
-    // Remove the text shape if content is empty
     if (!editingText.content.trim()) {
-      pushHistory(shapes.filter((s) => s.id !== editingText.shapeId));
+      history.push();
+      scene.deleteElement(editingText.shapeId);
+      onSceneMutate('delete');
+      renderStaticScene();
     }
     setEditingText(null);
   };
 
-  const applyResize = (
-    shape: Shape,
-    handle: ResizeHandle,
-    dx: number,
-    dy: number
-  ): Shape => {
-    const bounds = getShapeBounds(shape);
-    let { x, y, width, height } = bounds;
-
-    switch (handle) {
-      case 'se':
-        width += dx;
-        height += dy;
-        break;
-      case 'sw':
-        x += dx;
-        width -= dx;
-        height += dy;
-        break;
-      case 'ne':
-        width += dx;
-        y += dy;
-        height -= dy;
-        break;
-      case 'nw':
-        x += dx;
-        y += dy;
-        width -= dx;
-        height -= dy;
-        break;
-      case 'n':
-        y += dy;
-        height -= dy;
-        break;
-      case 's':
-        height += dy;
-        break;
-      case 'e':
-        width += dx;
-        break;
-      case 'w':
-        x += dx;
-        width -= dx;
-        break;
-    }
-
-    // Prevent negative dimensions
-    if (width < 10) {
-      x -= 10 - width;
-      width = 10;
-    }
-    if (height < 10) {
-      y -= 10 - height;
-      height = 10;
-    }
-
-    if (shape.type === 'freehand') {
-      const origBounds = getShapeBounds(shape);
-      const offsetX = x - origBounds.x;
-      const offsetY = y - origBounds.y;
-      return {
-        ...shape,
-        points: shape.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })),
-      };
-    }
-
-    if (shape.type === 'line' || shape.type === 'arrow') {
-      const origBounds = getShapeBounds(shape);
-      const offsetX = x - origBounds.x;
-      const offsetY = y - origBounds.y;
-      return {
-        ...shape,
-        startX: shape.startX + offsetX,
-        startY: shape.startY + offsetY,
-        endX: shape.endX + offsetX,
-        endY: shape.endY + offsetY,
-      } as LineShape | ArrowShape;
-    }
-
-    return { ...shape, x, y, width, height };
-  };
-
   // --- Unified pointer event pipeline ---
-  // All pointer events convert screen -> world coordinates and dispatch to ToolHandler
-  // based on activeTool. Canvas lock only allows panning.
 
   const onPointerDown = (e: React.PointerEvent) => {
-    // If currently editing text, don't process other pointer events
     if (editingText) return;
 
-    // Capture pointer to ensure all subsequent events go to this element
-    // even if pointer moves outside the canvas boundary
     const target = e.currentTarget;
     target.setPointerCapture(e.pointerId);
 
     const world = getWorldPoint(e);
 
-    // When locked, only panning is allowed — block all other interactions
+    // When locked, only panning is allowed
     if (locked) {
       if (e.button === 1 || (e.button === 0 && spacePressed.current)) {
         e.preventDefault();
@@ -1527,10 +1100,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       return;
     }
 
-    // Eraser tool: start pixel erase mode
+    // Eraser tool
     if (activeTool === 'eraser') {
       isDrawing.current = true;
-      startPoint.current = world;
       eraserPoints.current = [world];
       lastEraserPoint.current = world;
       setInteractionMode('drawing');
@@ -1560,9 +1132,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     const handle = hitTestHandles(world);
     const primaryId = selectedIds[selectedIds.length - 1];
     if (handle && primaryId) {
-      const shape = shapes.find((s) => s.id === primaryId);
-      if (shape) {
-        const bounds = getShapeBounds(shape);
+      const el = scene.getElement(primaryId);
+      if (el) {
+        const bounds = getElementBounds(el);
         resizeStartBounds.current = { ...bounds };
         setActiveHandle(handle);
         setInteractionMode('resizing');
@@ -1570,10 +1142,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       return;
     }
 
-    const hitShape = hitTestShapes(world);
-    if (hitShape) {
-      onSelectedIdsChange([hitShape.id]);
-      const bounds = getShapeBounds(hitShape);
+    const hitEl = hitTestElements(world);
+    if (hitEl) {
+      onSelectedIdsChange([hitEl.id]);
+      const bounds = getElementBounds(hitEl);
       moveOffset.current = { x: world.x - bounds.x, y: world.y - bounds.y };
       setInteractionMode('moving');
     } else {
@@ -1583,7 +1155,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    // When locked and not panning, ignore all pointer moves
     if (locked && !isPanning.current) return;
 
     const point = getWorldPoint(e);
@@ -1594,7 +1165,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       if (activeTool === 'eraser') {
         const prev = lastEraserPoint.current;
         if (prev) {
-          // Interpolate for smooth continuous erase
           const dx = point.x - prev.x;
           const dy = point.y - prev.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1624,67 +1194,58 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     if (interactionMode === 'moving' && selectedIds.length > 0) {
-      const primaryId = selectedIds[selectedIds.length - 1];
-      const primaryShape = shapes.find((s) => s.id === primaryId);
-      if (!primaryShape) return;
+      const elements = scene.getElements();
+      const selectedIdSet = new Set(selectedIds);
+      const currentElements = moveElementsRef.current ?? elements;
 
-      const bounds = getShapeBounds(primaryShape);
+      const primaryEl = currentElements.find((el) => el.id === selectedIds[selectedIds.length - 1]);
+      if (!primaryEl) return;
+
+      const bounds = getElementBounds(primaryEl);
       const newX = point.x - moveOffset.current.x;
       const newY = point.y - moveOffset.current.y;
       const dx = newX - bounds.x;
       const dy = newY - bounds.y;
 
-      // Only apply offset if there's actual movement
       if (dx === 0 && dy === 0) return;
 
-      const selectedIdSet = new Set(selectedIds);
-      const currentShapes = moveShapesRef.current ?? shapes;
-      const newShapes = currentShapes.map((s) => {
-        if (!selectedIdSet.has(s.id)) return s;
-        if (s.type === 'freehand') {
+      const newElements = currentElements.map((el) => {
+        if (!selectedIdSet.has(el.id)) return el;
+        if (el.type === 'freehand') {
           return {
-            ...s,
-            points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+            ...el,
+            points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
           };
         }
-        if (s.type === 'line' || s.type === 'arrow') {
-          return {
-            ...s,
-            startX: s.startX + dx,
-            startY: s.startY + dy,
-            endX: s.endX + dx,
-            endY: s.endY + dy,
-          } as LineShape | ArrowShape;
-        }
-        return { ...s, x: s.x + dx, y: s.y + dy };
+        // Move x/y for all other element types
+        return { ...el, x: el.x + dx, y: el.y + dy };
       });
 
-      moveShapesRef.current = newShapes;
-      redrawCanvas();
+      moveElementsRef.current = newElements;
+      onMoveElements(newElements);
       return;
     }
 
     if (interactionMode === 'resizing' && selectedIds.length > 0 && activeHandle) {
       const primaryId = selectedIds[selectedIds.length - 1];
-      const currentShapes = moveShapesRef.current ?? shapes;
-      const shape = currentShapes.find((s) => s.id === primaryId);
-      if (!shape) return;
+      const currentElements = moveElementsRef.current ?? scene.getElements();
+      const el = currentElements.find((e) => e.id === primaryId);
+      if (!el) return;
 
       const orig = resizeStartBounds.current;
       const dx = point.x - (orig.x + (activeHandle.includes('e') ? orig.width : 0));
       const dy = point.y - (orig.y + (activeHandle.includes('s') ? orig.height : 0));
 
-      const resized = applyResize(shape, activeHandle, dx, dy);
-      const newShapes = currentShapes.map((s) => (s.id === primaryId ? resized : s));
-      moveShapesRef.current = newShapes;
-      redrawCanvas();
+      const resized = applyResize(el, activeHandle, dx, dy);
+      const newElements = currentElements.map((e) => (e.id === primaryId ? resized : e));
+      moveElementsRef.current = newElements;
+      onMoveElements(newElements);
       return;
     }
 
     if (interactionMode === 'panning') {
       const dx = e.clientX - panStart.current.x;
       const dy = e.clientY - panStart.current.y;
-      // Update refs and redraw using ref-based transform — avoid React state re-renders during panning
       panXRef.current = dx;
       panYRef.current = dy;
 
@@ -1699,21 +1260,20 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const rc = roughCanvasRef.current;
         if (!bgCtx || !staticCtx || !interactiveCtx || !rc) return;
 
-        // Redraw background
         bgCtx.fillStyle = theme.canvasBg;
         bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-        // Redraw static layer
         staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
         staticCtx.save();
         applyCanvasTransformFromRefs(staticCtx);
-        for (const shape of shapes) {
-          drawShape(rc, shapeToElement(shape), themeMode);
+        const elements = scene.getElements();
+        for (const el of elements) {
+          drawShape(rc, el, themeMode);
         }
-        for (const shape of shapes) {
-          const ownerId = shapeOwners.get(shape.id);
+        for (const el of elements) {
+          const ownerId = shapeOwners.get(el.id);
           if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
-            const bounds = getShapeBounds(shape);
+            const bounds = getElementBounds(el);
             const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
             staticCtx.save();
             staticCtx.strokeStyle = borderColor;
@@ -1725,16 +1285,15 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         }
         staticCtx.restore();
 
-        // Redraw interactive layer (selection, handles)
         interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
         interactiveCtx.save();
         applyCanvasTransformFromRefs(interactiveCtx);
         for (const selId of selectedIds) {
-          const shape = shapes.find((s) => s.id === selId);
-          if (!shape) continue;
-          const bbox = getBBox(shape);
+          const el = elements.find((e) => e.id === selId);
+          if (!el) continue;
+          const bbox = getBBox(el);
           if (!bbox) continue;
-          const ownerId = shapeOwners.get(shape.id);
+          const ownerId = shapeOwners.get(el.id);
           const isRemote = ownerId && ownerId !== userId;
           interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
           interactiveCtx.lineWidth = 1.5 / scaleRef.current;
@@ -1760,36 +1319,24 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     if (activeTool === 'select' && selectedIds.length > 0) {
       const handle = hitTestHandles(point);
       if (handle) {
-        const cursorMap: Record<ResizeHandle, string> = {
-          nw: 'nwse-resize',
-          se: 'nwse-resize',
-          ne: 'nesw-resize',
-          sw: 'nesw-resize',
-          n: 'ns-resize',
-          s: 'ns-resize',
-          e: 'ew-resize',
-          w: 'ew-resize',
+        const cursorMap: Record<string, string> = {
+          nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+          n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
         };
         interactiveCanvasRef.current!.style.cursor = cursorMap[handle];
         return;
       }
     }
 
-    // Broadcast cursor position for presence
     broadcastCursor(point.x, point.y, false);
   };
 
-  /**
-   * Handle pointer leaving the canvas — broadcast cursor leave for presence.
-   */
   const onPointerLeave = () => {
     if (interactionMode === 'panning') return;
-    // Signal cursor left the canvas (useful for remote presence)
     broadcastCursor(mousePos.current.x, mousePos.current.y, false);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    // Release pointer capture set in onPointerDown
     const target = e.currentTarget;
     if (target.hasPointerCapture(e.pointerId)) {
       target.releasePointerCapture(e.pointerId);
@@ -1798,7 +1345,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     if (interactionMode === 'drawing') {
       isDrawing.current = false;
 
-      // Eraser: finalize pixel erase (shapes data unchanged in MVP scope)
+      // Eraser: finalize pixel erase (shapes data unchanged)
       if (activeTool === 'eraser') {
         eraserPoints.current = [];
         lastEraserPoint.current = null;
@@ -1815,26 +1362,30 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         }
       }
 
-      // Clear draft state
       draftRef.current = null;
       activeHandlerRef.current = null;
-
       setInteractionMode('idle');
       return;
     }
 
     if (interactionMode === 'moving' || interactionMode === 'resizing') {
-      // Commit intermediate shapes to React state (triggers WebSocket broadcast once)
-      const finalShapes = moveShapesRef.current ?? shapes;
-      pushHistory(finalShapes);
-      moveShapesRef.current = null;
+      // Commit intermediate elements to the scene
+      const finalElements = moveElementsRef.current;
+      if (finalElements && finalElements.length > 0) {
+        history.push();
+        for (const el of finalElements) {
+          scene.updateElement(el.id, el as Partial<SceneElement>);
+        }
+        onSceneMutate('update');
+      }
+      moveElementsRef.current = null;
       setInteractionMode('idle');
       setActiveHandle(null);
+      renderStaticScene();
       return;
     }
 
     if (interactionMode === 'panning') {
-      // Sync pan/panY to parent state after panning completes
       onPanXChange(panXRef.current);
       onPanYChange(panYRef.current);
       isMiddleButton.current = false;
@@ -1852,33 +1403,54 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     if (editingText) return;
     if (locked) return;
 
-    const point = getCanvasPoint(e);
-    const hitShape = hitTestShapes(point);
+    const point = getWorldPoint(e as unknown as React.PointerEvent);
+    const hitEl = hitTestElements(point);
 
-    if (!hitShape) {
+    if (!hitEl) {
       // Double-click on empty canvas opens inline text editor
       const id = generateId();
-      const newShape: TextShape = {
+      const newEl: SceneElement = {
         id,
         type: 'text',
         x: point.x,
         y: point.y,
         width: 0,
         height: 20,
+        angle: 0,
+        strokeColor: defaultStyle.strokeColor,
+        strokeWidth: defaultStyle.strokeWidth,
+        strokeStyle: defaultStyle.strokeStyle,
+        fillStyle: defaultStyle.fillStyle,
+        fillColor: defaultStyle.fillColor,
+        roughness: 1,
+        opacity: 1,
+        version: 1,
+        versionNonce: Math.floor(Math.random() * 1e9),
+        isDeleted: false,
+        groupIds: [],
+        index: 0,
+        updated: Date.now(),
+        ownerId: userId ?? '',
+        seed: Math.floor(Math.random() * 1e9),
         content: '',
         fontSize: 20,
-        style: { ...defaultStyle },
+        fontFamily: 'sans-serif',
+        textAlign: 'left',
+        verticalAlign: 'top',
+        lineHeight: 1.25,
       };
-      pushHistory([...shapes, newShape]);
+      scene.addElement(newEl);
+      history.push();
+      onSceneMutate('add');
       setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20 });
-    } else if (hitShape.type === 'text') {
-      const textShape = hitShape as TextShape;
+    } else if (hitEl.type === 'text') {
+      const textEl = hitEl as Extract<SceneElement, { type: 'text' }>;
       setEditingText({
-        shapeId: textShape.id,
-        x: textShape.x,
-        y: textShape.y,
-        content: textShape.content,
-        fontSize: textShape.fontSize,
+        shapeId: textEl.id,
+        x: textEl.x,
+        y: textEl.y,
+        content: textEl.content,
+        fontSize: textEl.fontSize,
       });
     }
   };
@@ -1951,14 +1523,12 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
             }}
           >
             <svg width="24" height="28" viewBox="0 0 24 28" style={{ display: 'block' }}>
-              {/* Pointer cursor */}
               <path
                 d="M2 2 L2 18 L6.5 13.5 L10.5 20 L13 18.5 L9 12.5 L15 12.5 Z"
                 fill={cursor.color}
                 stroke="#ffffff"
                 strokeWidth="1.5"
               />
-              {/* Pencil indicator when drawing */}
               {cursor.isDrawing && (
                 <g transform="translate(16, 16)">
                   <rect x="-4" y="-4" width="8" height="8" rx="1" fill="#fbbf24" stroke="#92400e" strokeWidth="0.8" />
@@ -1997,6 +1567,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
             height: eraserRadius * 2,
             borderRadius: '50%',
             border: '2px solid rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(255,255,255,0.2)',
             pointerEvents: 'none',
             zIndex: 1000,
           }}

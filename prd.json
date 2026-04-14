@@ -173,7 +173,7 @@
         "Test coverage for core/ directory is 80% or higher"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": true
     },
     {
       "id": "v2.1-refactor-010",
@@ -193,7 +193,7 @@
         "Verify in browser: WebSocket collaboration works (multiple users can draw and see each other's shapes)"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
