@@ -1194,6 +1194,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       // Delegate to ToolHandler for drawing tools
       const handler = activeHandlerRef.current;
       if (handler) {
+        // Clear interactive canvas before each draft redraw to prevent ghost trails
+        const interactiveCanvas = interactiveCanvasRef.current;
+        if (interactiveCanvas) {
+          const ctx = interactiveCanvas.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
+          }
+        }
         handler.onPointerMove(point.x, point.y, draftRef.current, setDraft);
       }
 
@@ -1367,6 +1375,15 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const result = handler.onPointerUp(draftRef.current, commitElement);
         if (!result) {
           redrawCanvas();
+        }
+      }
+
+      // Clear interactive canvas to remove draft shape after committing
+      const interactiveCanvas = interactiveCanvasRef.current;
+      if (interactiveCanvas) {
+        const ctx = interactiveCanvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
         }
       }
 
