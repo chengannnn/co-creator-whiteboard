@@ -144,7 +144,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   themeMode,
 }: CanvasComponentProps, ref) {
   const theme = getThemeColors(themeMode);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Three-layer canvas architecture
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const staticCanvasRef = useRef<HTMLCanvasElement>(null);
+  const interactiveCanvasRef = useRef<HTMLCanvasElement>(null);
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
   const startPoint = useRef<Point>({ x: 0, y: 0 });
@@ -477,7 +480,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         strokeLineDash: style.strokeStyle === 'dashed' ? [8, 6] : undefined,
       });
       // Draw arrowhead triangle at end point
-      const ctx = canvasRef.current?.getContext('2d');
+      const ctx = staticCanvasRef.current?.getContext('2d');
       if (ctx) {
         const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
         const arrowheadSize = style.strokeWidth * 3;
@@ -494,7 +497,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         ctx.restore();
       }
     } else if (shape.type === 'text') {
-      const ctx = canvasRef.current?.getContext('2d');
+      const ctx = staticCanvasRef.current?.getContext('2d');
       if (ctx && shape.content) {
         ctx.font = `${shape.fontSize}px sans-serif`;
         ctx.fillStyle = strokeColor;
@@ -511,7 +514,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         }
       }
     } else if (shape.type === 'image') {
-      const ctx = canvasRef.current?.getContext('2d');
+      const ctx = staticCanvasRef.current?.getContext('2d');
       if (ctx) {
         let img = imageCacheRef.current.get(shape.src);
         if (!img) {
@@ -526,32 +529,36 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
   };
 
-  const redrawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const roughCanvas = roughCanvasRef.current;
-    if (!roughCanvas) return;
+  // --- Three-layer canvas rendering ---
 
+  // Layer 0: Background — fills with theme canvas background color
+  const renderBackground = useCallback(() => {
+    const canvas = bgCanvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    // Use intermediate shapes during move/resize, otherwise use committed shapes
-    const activeShapes = moveShapesRef.current ?? shapes;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = theme.canvasBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, [theme]);
 
-    // Apply pan/scale transform for all drawing
+  // Layer 1: Static — renders committed elements using roughjs
+  const renderStaticScene = useCallback(() => {
+    const canvas = staticCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rc = roughCanvasRef.current;
+    if (!ctx || !rc) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     applyCanvasTransform(ctx);
 
-    for (const shape of activeShapes) {
-      drawShape(roughCanvas, shape);
+    for (const shape of shapes) {
+      drawShape(rc, shape);
     }
 
     // Draw colored borders on remote shapes (attribution)
-    for (const shape of activeShapes) {
+    for (const shape of shapes) {
       const ownerId = shapeOwners.get(shape.id);
       if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
         const bounds = getShapeBounds(shape);
@@ -565,43 +572,71 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       }
     }
 
-    // Pixel-based eraser: use destination-out to erase pixels
-    if (eraserPoints.current.length > 0) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    ctx.restore();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapes, applyCanvasTransform, shapeOwners, userId, scale]);
 
-      for (const pt of eraserPoints.current) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,1)';
-        ctx.fill();
-      }
+  // Layer 2: Interactive — renders draft elements, selection, resize handles, remote cursors
+  const renderInteractive = useCallback(() => {
+    const canvas = interactiveCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      // Connect consecutive points with stroked lines for smooth continuous erase
-      if (eraserPoints.current.length > 1) {
-        ctx.lineWidth = eraserRadius * 2;
-        ctx.strokeStyle = 'rgba(0,0,0,1)';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    applyCanvasTransform(ctx);
+
+    // Draw draft element if drawing (uses refs updated by handleMouseMove)
+    if (interactionMode === 'drawing') {
+      const baseTool = getBaseShapeTool(activeTool);
+      if (baseTool === 'freehand' && currentPoints.current.length > 1) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = getStrokeColor(DEFAULT_STYLE.strokeColor, themeMode);
+        ctx.lineWidth = DEFAULT_STYLE.strokeWidth;
         ctx.beginPath();
-        ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
-        for (let i = 1; i < eraserPoints.current.length; i++) {
-          ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
+        ctx.moveTo(currentPoints.current[0].x, currentPoints.current[0].y);
+        for (let i = 1; i < currentPoints.current.length; i++) {
+          ctx.lineTo(currentPoints.current[i].x, currentPoints.current[i].y);
         }
         ctx.stroke();
+        ctx.restore();
+      } else if (baseTool === 'eraser' && eraserPoints.current.length > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const pt of eraserPoints.current) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,1)';
+          ctx.fill();
+        }
+        if (eraserPoints.current.length > 1) {
+          ctx.lineWidth = eraserRadius * 2;
+          ctx.strokeStyle = 'rgba(0,0,0,1)';
+          ctx.beginPath();
+          ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
+          for (let i = 1; i < eraserPoints.current.length; i++) {
+            ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
       }
-
-      ctx.restore();
+      // Note: rectangle/ellipse/rhombus/line/arrow previews are drawn directly in handleMouseMove
+      // on the interactive canvas during drag, avoiding the need for intermediate point refs
     }
 
-    // Draw selection bounding boxes
+    // Draw selection bounding boxes and resize handles
     for (const selId of selectedIds) {
-      const shape = activeShapes.find((s) => s.id === selId);
+      const shape = shapes.find((s) => s.id === selId);
       if (!shape) continue;
       const bbox = getBBox(shape);
       if (!bbox) continue;
 
-      // Use owner color for remote shapes, default blue for own shapes
       const ownerId = shapeOwners.get(shape.id);
       const isRemote = ownerId && ownerId !== userId;
       ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
@@ -623,24 +658,52 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, selectedIds, getBBox, getHandlePositions, userId, shapeOwners, scale, applyCanvasTransform, eraserRadius, themeMode]);
+
+    // Pixel-based eraser on interactive canvas during eraser drag
+    if (interactionMode === 'drawing' && activeTool === 'eraser' && eraserPoints.current.length > 0) {
+      const rc = roughCanvasRef.current;
+      if (rc) {
+        renderStaticScene();
+      }
+    }
+  }, [interactionMode, activeTool, selectedIds, shapes, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, renderStaticScene, applyCanvasTransform]);
+
+  // Master redraw — redraws static and interactive layers
+  const redrawCanvas = useCallback(() => {
+    renderStaticScene();
+    renderInteractive();
+  }, [renderStaticScene, renderInteractive]);
+
+  // Full redraw including background
+  const redrawAll = useCallback(() => {
+    renderBackground();
+    renderStaticScene();
+    renderInteractive();
+  }, [renderBackground, renderStaticScene, renderInteractive]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const bgCanvas = bgCanvasRef.current;
+    const staticCanvas = staticCanvasRef.current;
+    const interactiveCanvas = interactiveCanvasRef.current;
+    if (!bgCanvas || !staticCanvas || !interactiveCanvas) return;
 
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      roughCanvasRef.current = new RoughCanvas(canvas);
-      redrawCanvas();
+    const resizeCanvases = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      bgCanvas.width = w;
+      bgCanvas.height = h;
+      staticCanvas.width = w;
+      staticCanvas.height = h;
+      interactiveCanvas.width = w;
+      interactiveCanvas.height = h;
+      roughCanvasRef.current = new RoughCanvas(staticCanvas);
+      redrawAll();
     };
 
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    return () => window.removeEventListener('resize', resizeCanvas);
-  }, [redrawCanvas]);
+    resizeCanvases();
+    window.addEventListener('resize', resizeCanvases);
+    return () => window.removeEventListener('resize', resizeCanvases);
+  }, [redrawAll]);
 
   useEffect(() => {
     redrawCanvas();
@@ -737,7 +800,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   }, [onScaleChange, onPanXChange, onPanYChange]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = interactiveCanvasRef.current;
     if (!canvas) return;
 
     const handleWheel = (e: WheelEvent) => {
@@ -908,7 +971,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // --- Mouse event helpers ---
 
   const getCanvasPoint = (e: React.MouseEvent): Point => {
-    const canvas = canvasRef.current;
+    const canvas = interactiveCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
@@ -920,7 +983,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     if (!editingText) return;
     const { shapeId, content } = editingText;
     if (content.trim()) {
-      const ctx = canvasRef.current?.getContext('2d');
+      const ctx = interactiveCanvasRef.current?.getContext('2d');
       let width = 100;
       let height = 20;
       if (ctx) {
@@ -1142,18 +1205,28 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         currentPoints.current.push(point);
         redrawCanvas();
 
-        const rc = roughCanvasRef.current;
-        if (rc && currentPoints.current.length > 1) {
-          rc.linearPath(currentPoints.current.map((p) => [p.x, p.y]), {
-            stroke: getStrokeColor(getStrokeColor(defaultStyle.strokeColor, themeMode), themeMode),
-            strokeWidth: defaultStyle.strokeWidth,
-          });
+        // Draw freehand preview on interactive canvas
+        const ctx = interactiveCanvasRef.current?.getContext('2d');
+        if (ctx && currentPoints.current.length > 1) {
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
+          ctx.lineWidth = defaultStyle.strokeWidth;
+          ctx.beginPath();
+          ctx.moveTo(currentPoints.current[0].x, currentPoints.current[0].y);
+          for (let i = 1; i < currentPoints.current.length; i++) {
+            ctx.lineTo(currentPoints.current[i].x, currentPoints.current[i].y);
+          }
+          ctx.stroke();
+          ctx.restore();
         }
       } else {
         redrawCanvas();
 
-        const rc = roughCanvasRef.current;
-        if (!rc) return;
+        // Draw shape preview on interactive canvas
+        const ctx = interactiveCanvasRef.current?.getContext('2d');
+        if (!ctx) return;
         const start = startPoint.current;
         const x = Math.min(start.x, point.x);
         const y = Math.min(start.y, point.y);
@@ -1161,69 +1234,53 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const height = Math.abs(point.y - start.y);
 
         const baseTool = getBaseShapeTool(activeTool);
+        ctx.save();
+        ctx.strokeStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
+        ctx.lineWidth = defaultStyle.strokeWidth;
+        if (defaultStyle.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
+
         if (baseTool === 'rectangle') {
-          rc.rectangle(x, y, width, height, {
-            stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
-            strokeWidth: defaultStyle.strokeWidth,
-          });
+          ctx.strokeRect(x, y, width, height);
         } else if (baseTool === 'ellipse') {
-          rc.ellipse(x + width / 2, y + height / 2, width, height, {
-            stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
-            strokeWidth: defaultStyle.strokeWidth,
-          });
+          ctx.beginPath();
+          ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+          ctx.stroke();
         } else if (baseTool === 'rhombus') {
           const cx = x + width / 2;
           const cy = y + height / 2;
           const hw = width / 2;
           const hh = height / 2;
-          rc.polygon(
-            [
-              [cx, cy - hh],
-              [cx + hw, cy],
-              [cx, cy + hh],
-              [cx - hw, cy],
-            ],
-            {
-              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
-              strokeWidth: defaultStyle.strokeWidth,
-            },
-          );
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - hh);
+          ctx.lineTo(cx + hw, cy);
+          ctx.lineTo(cx, cy + hh);
+          ctx.lineTo(cx - hw, cy);
+          ctx.closePath();
+          ctx.stroke();
         } else if (baseTool === 'line') {
-          rc.linearPath(
-            [[start.x, start.y], [point.x, point.y]],
-            {
-              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
-              strokeWidth: defaultStyle.strokeWidth,
-              strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
-            },
-          );
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(point.x, point.y);
+          ctx.stroke();
         } else if (baseTool === 'arrow') {
-          rc.linearPath(
-            [[start.x, start.y], [point.x, point.y]],
-            {
-              stroke: getStrokeColor(defaultStyle.strokeColor, themeMode),
-              strokeWidth: defaultStyle.strokeWidth,
-              strokeLineDash: defaultStyle.strokeStyle === 'dashed' ? [8, 6] : undefined,
-            },
-          );
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(point.x, point.y);
+          ctx.stroke();
           // Draw arrowhead preview
-          const ctx = canvasRef.current?.getContext('2d');
-          if (ctx) {
-            const angle = Math.atan2(point.y - start.y, point.x - start.x);
-            const arrowheadSize = defaultStyle.strokeWidth * 3;
-            ctx.save();
-            ctx.fillStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
-            ctx.translate(point.x, point.y);
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(-arrowheadSize, -arrowheadSize / 2);
-            ctx.lineTo(-arrowheadSize, arrowheadSize / 2);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-          }
+          const angle = Math.atan2(point.y - start.y, point.x - start.x);
+          const arrowheadSize = defaultStyle.strokeWidth * 3;
+          ctx.fillStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
+          ctx.translate(point.x, point.y);
+          ctx.rotate(angle);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-arrowheadSize, -arrowheadSize / 2);
+          ctx.lineTo(-arrowheadSize, arrowheadSize / 2);
+          ctx.closePath();
+          ctx.fill();
         }
+        ctx.restore();
       }
       return;
     }
@@ -1292,70 +1349,71 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       // Update refs and redraw using ref-based transform — avoid React state re-renders during panning
       panXRef.current = dx;
       panYRef.current = dy;
-      // Redraw using ref-based transform for smooth panning
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const roughCanvas = roughCanvasRef.current;
-        if (!roughCanvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
 
-        const activeShapes = moveShapesRef.current ?? shapes;
+      // Redraw all three layers with ref-based transform
+      const bgCanvas = bgCanvasRef.current;
+      const staticCanvas = staticCanvasRef.current;
+      const interactiveCanvas = interactiveCanvasRef.current;
+      if (bgCanvas && staticCanvas && interactiveCanvas) {
+        const bgCtx = bgCanvas.getContext('2d');
+        const staticCtx = staticCanvas.getContext('2d');
+        const interactiveCtx = interactiveCanvas.getContext('2d');
+        const rc = roughCanvasRef.current;
+        if (!bgCtx || !staticCtx || !interactiveCtx || !rc) return;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = theme.canvasBg;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Redraw background
+        bgCtx.fillStyle = theme.canvasBg;
+        bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-        ctx.save();
-        applyCanvasTransformFromRefs(ctx);
-
-        for (const shape of activeShapes) {
-          drawShape(roughCanvas, shape);
+        // Redraw static layer
+        staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+        staticCtx.save();
+        applyCanvasTransformFromRefs(staticCtx);
+        for (const shape of shapes) {
+          drawShape(rc, shape);
         }
-
-        // Draw colored borders on remote shapes
-        for (const shape of activeShapes) {
+        for (const shape of shapes) {
           const ownerId = shapeOwners.get(shape.id);
           if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
             const bounds = getShapeBounds(shape);
             const borderColor = ownerId.split('-')[0] ?? '#8b5cf6';
-            ctx.save();
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = 2 / scaleRef.current;
-            ctx.setLineDash([]);
-            ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
-            ctx.restore();
+            staticCtx.save();
+            staticCtx.strokeStyle = borderColor;
+            staticCtx.lineWidth = 2 / scaleRef.current;
+            staticCtx.setLineDash([]);
+            staticCtx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+            staticCtx.restore();
           }
         }
+        staticCtx.restore();
 
-        // Draw selection bounding boxes
+        // Redraw interactive layer (selection, handles)
+        interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
+        interactiveCtx.save();
+        applyCanvasTransformFromRefs(interactiveCtx);
         for (const selId of selectedIds) {
-          const shape = activeShapes.find((s) => s.id === selId);
+          const shape = shapes.find((s) => s.id === selId);
           if (!shape) continue;
           const bbox = getBBox(shape);
           if (!bbox) continue;
-
           const ownerId = shapeOwners.get(shape.id);
           const isRemote = ownerId && ownerId !== userId;
-          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-          ctx.lineWidth = 1.5 / scaleRef.current;
-          ctx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
-          ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
-          ctx.setLineDash([]);
-
+          interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          interactiveCtx.lineWidth = 1.5 / scaleRef.current;
+          interactiveCtx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
+          interactiveCtx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+          interactiveCtx.setLineDash([]);
           const handles = getHandlePositions(bbox);
-          ctx.fillStyle = '#ffffff';
-          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-          ctx.lineWidth = 1.5 / scaleRef.current;
-
+          interactiveCtx.fillStyle = '#ffffff';
+          interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          interactiveCtx.lineWidth = 1.5 / scaleRef.current;
           for (const pos of Object.values(handles)) {
             const hs = HANDLE_SIZE / scaleRef.current;
-            ctx.fillRect(pos.x, pos.y, hs, hs);
-            ctx.strokeRect(pos.x, pos.y, hs, hs);
+            interactiveCtx.fillRect(pos.x, pos.y, hs, hs);
+            interactiveCtx.strokeRect(pos.x, pos.y, hs, hs);
           }
         }
-
-        ctx.restore();
+        interactiveCtx.restore();
       }
       return;
     }
@@ -1374,7 +1432,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           e: 'ew-resize',
           w: 'ew-resize',
         };
-        canvasRef.current!.style.cursor = cursorMap[handle];
+        interactiveCanvasRef.current!.style.cursor = cursorMap[handle];
         return;
       }
     }
@@ -1551,19 +1609,38 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        style={{
-          display: 'block',
-          width: '100vw',
-          height: '100vh',
-          cursor: cursorStyle,
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onDoubleClick={handleDoubleClick}
-      />
+      {/* Three-layer canvas container */}
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh' }}>
+        {/* Layer 0: Background */}
+        <canvas
+          ref={bgCanvasRef}
+          id="canvas-bg"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+        />
+        {/* Layer 1: Static (roughjs committed elements) */}
+        <canvas
+          ref={staticCanvasRef}
+          id="canvas-static"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+        />
+        {/* Layer 2: Interactive (draft, selection, remote cursors) */}
+        <canvas
+          ref={interactiveCanvasRef}
+          id="canvas-interactive"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            cursor: cursorStyle,
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onDoubleClick={handleDoubleClick}
+        />
+      </div>
       {Array.from(remoteCursors.values()).map((cursor) => {
         const colorName = HEX_TO_COLOR_NAME[cursor.color] ?? '';
         const displayName = colorName ? `${colorName} ${cursor.name}` : cursor.name;

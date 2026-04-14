@@ -77,7 +77,7 @@
         "Verify in browser: drawing a shape no longer flickers; completed shapes remain stable"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

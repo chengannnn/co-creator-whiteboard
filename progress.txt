@@ -543,3 +543,16 @@ Started: Sun Apr 12 16:08:46     2026
   - The current CanvasComponent.tsx has inline screenToWorld/applyCanvasTransform functions using panX/panY/scale state — these will be replaced in subsequent stories when migrating to the new render pipeline
   - ViewTransform uses scrollX/scrollY/zoom naming (matching the PRD) rather than panX/panY/scale — a mapping will be needed during migration
 ---
+
+## [2026-04-14] - v2.1-refactor-004
+- Implemented three-layer canvas container component to eliminate drawing flicker
+- Files changed:
+  - packages/frontend/src/components/CanvasComponent.tsx: replaced single canvas element with three absolutely-stacked canvases (canvas-bg for background fill, canvas-static for roughjs committed elements, canvas-interactive for draft/selection/handles). Implemented renderBackground(theme) for bg layer, renderStaticScene(scene, theme, viewTransform) for static layer with roughjs, renderInteractive(draft, selection, theme, viewTransform) for interactive layer with native Canvas 2D. Updated window resize handler to resize all three canvases and trigger full redraw. Updated all canvasRef references to use the appropriate layer ref (staticCanvasRef for drawShape, interactiveCanvasRef for mouse events and previews). Updated panning handler to redraw all three layers with ref-based transforms.
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Three-layer architecture separates concerns: background never needs clearing, static only redraws on committed changes, interactive clears and redraws on every frame during drag
+  - Mouse event handlers are attached to the topmost (interactive) canvas layer, which covers the full viewport
+  - drawShape() uses staticCanvasRef for arrowhead/text/image rendering since it's called during static layer rendering
+  - Preview shapes during drag are drawn directly in handleMouseMove on the interactive canvas (not through renderInteractive) to avoid needing additional point-tracking refs
+  - Panning uses ref-based transforms on all three layers for jitter-free rendering, with debounced state sync
+---
