@@ -800,3 +800,17 @@ Started: Sun Apr 12 16:08:46     2026
   - rough.js does NOT support borderRadius for rc.polygon() — for rounded rhombus, use a rotated rounded rectangle approach (rc.rectangle with rotation: Math.PI/4)
   - borderRadius is only applicable to rectangle and rhombus element types — ellipse, line, freehand, text, and image do not support it
 ---
+
+## [2026-04-14 18:14] - US-007
+- Implemented round corner as attribute modifier for selected shapes
+- Changes:
+  - App.tsx: Replaced inline `onRoundCornerToggle` with `handleRoundCornerToggle` useCallback. When clicked, filters selectedIds for rectangle/rhombus types, updates each eligible shape's borderRadius (12 when toggled on, 0 when toggled off) via scene.updateElement(), pushes one history snapshot for the batch update, and triggers Static Canvas redraw via onSceneMutate
+  - Uses `useCallback` with `[selectedIds]` dependency to re-create handler when selection changes
+  - eslint-disable for exhaustive-deps since selectedIds changes frequently and scene/history are refs (stable)
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - When using `setIsRoundCornerEnabled(prev => ...)`, the updater function receives the previous state but the callback closure (scene, selectedIds) captures the current values — this is correct since we need the current selection, not the selection at the time of the previous toggle
+  - The `useCallback` dependency array uses eslint-disable for exhaustive-deps because `selectedIds` changes frequently; `onSceneMutate` and `sceneRef.current` are stable and don't need to be listed
+  - Batch updates: calling scene.updateElement() multiple times followed by a single history.push() ensures one undo step for the entire batch, not one per element
+---

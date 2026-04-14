@@ -67,6 +67,28 @@ function WhiteboardRoom() {
   // Round corner toggle (for rectangle/rhombus tools)
   const [isRoundCornerEnabled, setIsRoundCornerEnabled] = useState(false);
 
+  const handleRoundCornerToggle = useCallback(() => {
+    setIsRoundCornerEnabled((prev) => {
+      const next = !prev;
+      const borderRadius = next ? 12 : 0;
+      const scene = sceneRef.current;
+      const history = historyRef.current;
+      const eligibleIds = selectedIds.filter((id) => {
+        const el = scene.getElement(id);
+        return el && (el.type === 'rectangle' || el.type === 'rhombus');
+      });
+      if (eligibleIds.length > 0) {
+        for (const id of eligibleIds) {
+          scene.updateElement(id, { borderRadius });
+        }
+        history.push();
+        onSceneMutate('update');
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds]);
+
   // Scene and history (refs to avoid re-renders on every mutation)
   const sceneRef = useRef<Scene>(new Scene());
   const historyRef = useRef<HistoryManager>(new HistoryManager(sceneRef.current));
@@ -524,7 +546,7 @@ function WhiteboardRoom() {
         themeMode={themeMode}
         onThemeChange={setThemeMode}
         isRoundCornerEnabled={isRoundCornerEnabled}
-        onRoundCornerToggle={() => setIsRoundCornerEnabled((v) => !v)}
+        onRoundCornerToggle={handleRoundCornerToggle}
       />
       <CanvasComponent
         ref={canvasRef}
