@@ -7,15 +7,14 @@ interface BottomPanelProps {
   wsStatus: 'connected' | 'disconnected' | 'reconnecting';
   scale: number;
   themeMode: ThemeMode;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
+  onZoom: (value: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
 }
 
-export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode, onZoomIn, onZoomOut, onUndo, onRedo, canUndo, canRedo }: BottomPanelProps) {
+export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeMode, onZoom, onUndo, onRedo, canUndo, canRedo }: BottomPanelProps) {
   const theme = getThemeColors(themeMode);
   const [copied, setCopied] = useState(false);
 
@@ -217,7 +216,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
           }}
         >
           <button
-            onClick={onZoomOut}
+            onClick={() => onZoom(Math.round((scale - 0.25) * 100) / 100)}
             style={{
               width: '24px',
               height: '22px',
@@ -257,7 +256,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
             {Math.round(scale * 100)}%
           </span>
           <button
-            onClick={onZoomIn}
+            onClick={() => onZoom(Math.round((scale + 0.25) * 100) / 100)}
             style={{
               width: '24px',
               height: '22px',

@@ -210,6 +210,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   useEffect(() => { panYRef.current = panY; }, [panY]);
   useEffect(() => { if (!moveShapesRef.current) moveShapesRef.current = shapes; }, [shapes]);
 
+  // Redraw all layers when zoom/pan state changes (e.g., from +/- button clicks).
+  // Wheel zoom handles its own immediate redraw via refs; this catches state-driven updates.
+  useEffect(() => {
+    renderStaticScene();
+    renderInteractive();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, panX, panY]);
+
   const pushHistory = useCallback(
     (newShapes: Shape[]) => {
       onHistoryChange([...history, shapes]);
