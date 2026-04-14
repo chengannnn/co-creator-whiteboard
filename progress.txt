@@ -765,3 +765,20 @@ Started: Sun Apr 12 16:08:46     2026
   - SVG icons in toolbar use `currentColor` for stroke/fill — this automatically adapts to `theme.textPrimary` set on the button, working correctly in both light and dark modes without extra logic
   - The select tool is now rendered separately from the TOOLS map since it has special positioning requirements (after lock, before drawing tools)
 ---
+
+## [2026-04-14 18:06] - US-005
+- Added round corner button with state machine to toolbar
+- Changes:
+  - App.tsx: Added `isRoundCornerEnabled` state (default false) and passed `isRoundCornerEnabled` + `onRoundCornerToggle` to UnifiedToolbar
+  - UnifiedToolbar.tsx: Added `canRoundCorner` computed value (true for rectangle, rectangle-solid, rhombus, rhombus-solid tools)
+  - Round Corner button positioned at rightmost of toolbar first row (after Image button)
+  - Disabled state: opacity 0.4, cursor not-allowed, muted color when active tool is not round-corner-capable
+  - Enabled state: normal appearance when active tool is rectangle/rectangle-solid/rhombus/rhombus-solid
+  - Toggled on state: highlighted with active border/background when `isRoundCornerEnabled` is true
+  - Button uses SVG icon (curved corner path) for visual clarity
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - The `canRoundCorner` check is centralized in UnifiedToolbar based on `activeTool` — this ensures the button state updates reactively when activeTool changes without additional wiring
+  - Using `disabled` attribute on the button prevents clicks while keeping the button visible (gray/semi-transparent) — important for UX to show the feature exists even when unavailable
+---

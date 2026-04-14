@@ -64,6 +64,9 @@ function WhiteboardRoom() {
   // Theme (light/dark, not persisted, defaults to light)
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
 
+  // Round corner toggle (for rectangle/rhombus tools)
+  const [isRoundCornerEnabled, setIsRoundCornerEnabled] = useState(false);
+
   // Scene and history (refs to avoid re-renders on every mutation)
   const sceneRef = useRef<Scene>(new Scene());
   const historyRef = useRef<HistoryManager>(new HistoryManager(sceneRef.current));
@@ -520,6 +523,8 @@ function WhiteboardRoom() {
         onSave={handleExportPng}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
+        isRoundCornerEnabled={isRoundCornerEnabled}
+        onRoundCornerToggle={() => setIsRoundCornerEnabled((v) => !v)}
       />
       <CanvasComponent
         ref={canvasRef}

@@ -74,6 +74,8 @@ interface UnifiedToolbarProps {
   onSave: () => void;
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
+  isRoundCornerEnabled: boolean;
+  onRoundCornerToggle: () => void;
 }
 
 export default function UnifiedToolbar({
@@ -93,8 +95,11 @@ export default function UnifiedToolbar({
   onSave,
   themeMode,
   onThemeChange,
+  isRoundCornerEnabled,
+  onRoundCornerToggle,
 }: UnifiedToolbarProps) {
   const theme = getThemeColors(themeMode);
+  const canRoundCorner = activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef<{ x: number; y: number; toolbarX: number; toolbarY: number } | null>(null);
@@ -355,6 +360,48 @@ export default function UnifiedToolbar({
           }}
         >
           🖼
+        </button>
+
+        {/* Round Corner button — rightmost of row 1 */}
+        <button
+          title="Round Corner"
+          disabled={!canRoundCorner}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canRoundCorner) {
+              onRoundCornerToggle();
+            }
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: canRoundCorner && isRoundCornerEnabled
+              ? `2px solid ${theme.btnActiveBorder}`
+              : '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: canRoundCorner && isRoundCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: canRoundCorner ? 'pointer' : 'not-allowed',
+            color: canRoundCorner ? theme.textPrimary : theme.textMuted,
+            opacity: canRoundCorner ? 1 : 0.4,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (canRoundCorner && !isRoundCornerEnabled) {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = canRoundCorner && isRoundCornerEnabled
+              ? theme.btnActiveBg
+              : theme.btnDefaultBg;
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 12a8 8 0 0 1 8-8" />
+          </svg>
         </button>
       </div>
 
