@@ -177,6 +177,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // Pan/zoom interaction refs
   const spacePressed = useRef(false);
   const isMiddleButton = useRef(false);
+  const isPanning = useRef(false);
   const panStart = useRef<Point>({ x: 0, y: 0 });
   const scaleRef = useRef(1);
   const panXRef = useRef(0);
@@ -1206,6 +1207,22 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     return screenToWorld(screenX, screenY);
   };
 
+  /**
+   * Convert pointer event to world coordinates using refs (no re-render).
+   * Used by unified pointer event pipeline for consistent coordinate mapping.
+   */
+  const getWorldPoint = (e: React.PointerEvent): Point => {
+    const canvas = interactiveCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    return {
+      x: (screenX - panXRef.current) / scaleRef.current,
+      y: (screenY - panYRef.current) / scaleRef.current,
+    };
+  };
+
   const finishEditing = () => {
     if (!editingText) return;
     const { shapeId, content } = editingText;
@@ -1324,11 +1341,20 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     return { ...shape, x, y, width, height };
   };
 
-  // --- Mouse handlers ---
+  // --- Unified pointer event pipeline ---
+  // All pointer events convert screen -> world coordinates and dispatch to ToolHandler
+  // based on activeTool. Canvas lock only allows panning.
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // If currently editing text, don't process other mouse events
+  const onPointerDown = (e: React.PointerEvent) => {
+    // If currently editing text, don't process other pointer events
     if (editingText) return;
+
+    // Capture pointer to ensure all subsequent events go to this element
+    // even if pointer moves outside the canvas boundary
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+
+    const world = getWorldPoint(e);
 
     // When locked, only panning is allowed — block all other interactions
     if (locked) {
@@ -1336,47 +1362,45 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         e.preventDefault();
         panStart.current = { x: e.clientX - panXRef.current, y: e.clientY - panYRef.current };
         if (e.button === 1) isMiddleButton.current = true;
+        isPanning.current = true;
         setInteractionMode('panning');
       }
       return;
     }
 
-    // Eraser tool: start pixel erase mode (no shape deletion)
+    // Eraser tool: start pixel erase mode
     if (activeTool === 'eraser') {
-      const point = getCanvasPoint(e);
       isDrawing.current = true;
-      startPoint.current = point;
-      eraserPoints.current = [point];
-      lastEraserPoint.current = point;
+      startPoint.current = world;
+      eraserPoints.current = [world];
+      lastEraserPoint.current = world;
       setInteractionMode('drawing');
       return;
     }
-
-    const point = getCanvasPoint(e);
 
     // Middle-click or space+drag starts panning
     if (e.button === 1 || (e.button === 0 && spacePressed.current)) {
       e.preventDefault();
       panStart.current = { x: e.clientX - panXRef.current, y: e.clientY - panYRef.current };
       if (e.button === 1) isMiddleButton.current = true;
-      setInteractionMode("panning");
+      isPanning.current = true;
+      setInteractionMode('panning');
       return;
     }
 
     if (activeTool !== 'select') {
       // Drawing mode
       isDrawing.current = true;
-      startPoint.current = point;
-      currentPoints.current = [point];
+      startPoint.current = world;
+      currentPoints.current = [world];
       setInteractionMode('drawing');
       return;
     }
 
-    // Select tool
-    const handle = hitTestHandles(point);
+    // Select tool: hit-testing, resize handle detection, move/resize mode entry
+    const handle = hitTestHandles(world);
     const primaryId = selectedIds[selectedIds.length - 1];
     if (handle && primaryId) {
-      // Start resizing
       const shape = shapes.find((s) => s.id === primaryId);
       if (shape) {
         const bounds = getShapeBounds(shape);
@@ -1387,11 +1411,11 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       return;
     }
 
-    const hitShape = hitTestShapes(point);
+    const hitShape = hitTestShapes(world);
     if (hitShape) {
       onSelectedIdsChange([hitShape.id]);
       const bounds = getShapeBounds(hitShape);
-      moveOffset.current = { x: point.x - bounds.x, y: point.y - bounds.y };
+      moveOffset.current = { x: world.x - bounds.x, y: world.y - bounds.y };
       setInteractionMode('moving');
     } else {
       onSelectedIdsChange([]);
@@ -1399,8 +1423,11 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const point = getCanvasPoint(e);
+  const onPointerMove = (e: React.PointerEvent) => {
+    // When locked and not panning, ignore all pointer moves
+    if (locked && !isPanning.current) return;
+
+    const point = getWorldPoint(e);
     mousePos.current = point;
 
     if (interactionMode === 'drawing') {
@@ -1668,8 +1695,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     broadcastCursor(point.x, point.y, false);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    const point = getCanvasPoint(e);
+  /**
+   * Handle pointer leaving the canvas — broadcast cursor leave for presence.
+   */
+  const onPointerLeave = () => {
+    if (interactionMode === 'panning') return;
+    // Signal cursor left the canvas (useful for remote presence)
+    broadcastCursor(mousePos.current.x, mousePos.current.y, false);
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    // Release pointer capture set in onPointerDown
+    const target = e.currentTarget;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+
+    const point = getWorldPoint(e);
 
     if (interactionMode === 'drawing') {
       isDrawing.current = false;
@@ -1774,6 +1816,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       onPanXChange(panXRef.current);
       onPanYChange(panYRef.current);
       isMiddleButton.current = false;
+      isPanning.current = false;
       setInteractionMode('idle');
       return;
     }
@@ -1862,9 +1905,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
             height: '100%',
             cursor: cursorStyle,
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerLeave}
           onDoubleClick={handleDoubleClick}
         />
       </div>
