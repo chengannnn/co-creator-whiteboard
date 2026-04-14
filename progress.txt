@@ -577,4 +577,24 @@ Started: Sun Apr 12 16:08:46     2026
   - setPointerCapture ensures pointer events continue to be received even when cursor leaves the canvas during drag
   - Using refs (panXRef, panYRef, scaleRef) for coordinate conversion in pointer handlers avoids stale closure issues and re-render performance costs
   - CanvasComponent does not have wsRef — cursor broadcast logic must use the broadcastCursor prop, not direct WebSocket access
+
+---
+
+## [2026-04-14] - v2.1-refactor-007
+- Implemented ToolHandler for each drawing tool following the Strategy Pattern
+- Files changed:
+  - packages/frontend/src/core/tools/helpers.ts: generateElementId(), createBaseElement(), createDraft() utility functions
+  - packages/frontend/src/core/tools/RectangleHandler.ts: factory createBBoxHandler() for rectangle, ellipse, rhombus shapes — onPointerDown creates draft at origin, onPointerMove updates bbox dimensions, onPointerUp commits if dimensions > 3px
+  - packages/frontend/src/core/tools/LineHandler.ts: factory createLineHandler() for line and arrow shapes — onPointerDown creates draft with points=[[0,0]], onPointerMove updates to [[0,0],[dx,dy]], onPointerUp commits if distance > 3px
+  - packages/frontend/src/core/tools/FreehandHandler.ts: factory createFreehandHandler() — onPointerDown creates draft with points=[[0,0]], onPointerMove appends each point with origin recalculation, onPointerUp commits if point count > 2
+  - packages/frontend/src/core/tools/EraserHandler.ts: stub handler (rendering handled by CanvasComponent directly)
+  - packages/frontend/src/core/tools/SelectToolHandler.ts: factory createSelectToolHandler() with hit-testing, multi-select, move, resize sub-modes — uses internal state machine, returns intermediate shapes for commit
+  - packages/frontend/src/components/CanvasComponent.tsx: integrated ToolHandlers into pointer event pipeline — onPointerDown creates handler and calls onPointerDown, onPointerMove delegates to handler and updates draft, onPointerUp calls handler.onPointerUp with commitElement callback that converts SceneElement back to Shape. Draft element rendered via drawShape in renderInteractive. Removed inline shape creation code from pointer handlers.
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - ToolHandler factories capture defaultStyle at creation time (onPointerDown), avoiding stale closure issues during drag
+  - commitElement callback converts SceneElement back to Shape format — this bridge is needed during gradual migration and will be removed when Scene becomes the single source of truth
+  - renderInteractive must draw draft.element via drawShape() rather than inline canvas calls — this unifies preview and committed rendering paths
+  - SelectToolHandler uses a different pattern (factory returning object with callbacks) rather than static ToolHandler — selection works with existing shapes, not new drafts
+  - Tool handlers return factory-created instances (not static objects) to capture style in closures
 ---
