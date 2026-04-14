@@ -214,7 +214,7 @@
         "Verify in browser: draw to undo to redo to new draw works correctly; clear canvas to undo restores all content"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

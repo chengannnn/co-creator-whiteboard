@@ -658,3 +658,24 @@ Started: Sun Apr 12 16:08:46     2026
   - The onSceneMutate callback pattern cleanly separates CanvasComponent's rendering concerns from App.tsx's history + WebSocket concerns
   - Move/resize operations track intermediate SceneElement[] in moveElementsRef, then batch-update the scene on pointer-up via scene.updateElement() for each modified element
   - Deleting types/shapes.ts removes ~117 lines of legacy code; ToolType and DEFAULT_STYLE were migrated to element.ts to avoid duplicating type definitions
+
+---
+
+## [2026-04-14] - v2.1-refactor-011
+- Verified undo/redo mechanism based on full scene snapshots is already fully implemented
+- All acceptance criteria met:
+  - HistoryManager stores SceneElement[] snapshots with structuredClone deep copies
+  - Forward history stack for redo operations
+  - push() saves snapshot + clears forwardHistory after each committed action
+  - undo()/redo() correctly swap snapshots and call scene.replaceAll()
+  - BottomPanel undo/redo buttons disabled when respective stacks empty
+  - Ctrl+Z (CanvasComponent) and Ctrl+Y (App.tsx) keyboard shortcuts preserved
+  - selectedIds cleared on undo/redo via onSelectedIdsChange([])
+  - Clear canvas action fully undoable (history pushed before deletions)
+  - Multiple undo/redo cycles verified via history.test.ts
+- No files changed — implementation was already complete from previous stories
+- TypeScript passes with zero errors, all 57 tests pass
+- **Learnings for future iterations:**
+  - HistoryManager + Scene snapshot pattern is robust — no additional work needed for story 011
+  - Ctrl+Z has a `locked` check in CanvasComponent while Ctrl+Y in App.tsx does not — this is existing behavior preserved per PRD requirement
+---
