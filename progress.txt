@@ -532,3 +532,14 @@ Started: Sun Apr 12 16:08:46     2026
   - Union type spread with `Partial<T>` requires `as SceneElement` cast because TypeScript can't narrow the intersection of a spread union
   - getBoundingBox() handles both bbox-based elements (rectangle, ellipse, rhombus, text, image) and points-based elements (line, arrow, freehand) by checking `el.type`
 ---
+
+## [2026-04-14] - v2.1-refactor-003
+- Implemented coordinate transform utility functions
+- Files changed:
+  - packages/frontend/src/core/transform.ts: new file with ViewTransform interface (scrollX, scrollY, zoom), screenToWorld() using formula (screen - scroll) / zoom, worldToScreen() using formula world * zoom + scroll, applyTransform() calling ctx.setTransform(zoom, 0, 0, zoom, scrollX, scrollY)
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - These are pure utility functions — no React hooks or component state needed, making them stable references that can be imported anywhere
+  - The current CanvasComponent.tsx has inline screenToWorld/applyCanvasTransform functions using panX/panY/scale state — these will be replaced in subsequent stories when migrating to the new render pipeline
+  - ViewTransform uses scrollX/scrollY/zoom naming (matching the PRD) rather than panX/panY/scale — a mapping will be needed during migration
+---
