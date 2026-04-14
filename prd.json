@@ -157,7 +157,7 @@
         "Verify in browser: clicking + / - buttons zooms correctly; wheel zoom works; percentage text updates; coordinate mapping remains accurate at all zoom levels"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -173,8 +173,7 @@
         "Test coverage for core/ directory is 80% or higher"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Runs in parallel after Phase 1 (US-002, US-003) and Phase 4 (US-011) stories"
+      "passes": true,
     },
     {
       "id": "v2.1-refactor-010",

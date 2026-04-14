@@ -16,6 +16,10 @@ Started: Sun Apr 12 16:08:46     2026
 - Use `forwardRef` + `useImperativeHandle` to expose child component methods (e.g., canvas export) to parent components
 - rough.js uses `strokeLineDash` (e.g., `[8, 6]`) for dashed strokes — NOT `strokeStyle`
 - Move pure helper functions to module level for stable references that don't trigger re-renders in hook dependency arrays
+- Vitest is used for unit testing with jsdom environment; install via `npm install --save-dev vitest jsdom` and add `"test": "vitest run"` to scripts
+- HistoryManager pattern: push() saves current state AFTER each committed action; undo() pops last saved state and restores it; redo() pops from forward history
+- structuredClone works correctly in jsdom for deep copying SceneElement arrays with nested points arrays
+- Test helper functions like makeRect() should use module scope to avoid unused import warnings in tsconfig strict mode
 
 ---
 
@@ -597,4 +601,36 @@ Started: Sun Apr 12 16:08:46     2026
   - renderInteractive must draw draft.element via drawShape() rather than inline canvas calls — this unifies preview and committed rendering paths
   - SelectToolHandler uses a different pattern (factory returning object with callbacks) rather than static ToolHandler — selection works with existing shapes, not new drafts
   - Tool handlers return factory-created instances (not static objects) to capture style in closures
+---
+
+## [2026-04-14] - v2.1-refactor-009
+- Implemented unit tests for core logic (Scene, transform, history)
+- Set up Vitest with jsdom environment in frontend project
+- Files changed:
+  - packages/frontend/package.json: added vitest, jsdom dev dependencies, "test" and "test:watch" scripts
+  - packages/frontend/vitest.config.ts: new vitest configuration with jsdom environment and react plugin
+  - packages/frontend/src/core/__tests__/Scene.test.ts: comprehensive tests for Scene class (addElement/getElements, getElement, updateElement with version increment, deleteElement/restoreElement, replaceAll, snapshot deep copy, getBoundingBox for bbox-based and points-based elements)
+  - packages/frontend/src/core/__tests__/transform.test.ts: tests for screenToWorld, worldToScreen (including symmetry at zoom 0.1/0.5/1.0/2.0/5.0), applyTransform with mock canvas context
+  - packages/frontend/src/core/__tests__/history.test.ts: tests for HistoryManager (push, undo, redo, undo/redo cycles, clear canvas undo, canUndo/canRedo)
+  - packages/frontend/src/core/HistoryManager.ts: new HistoryManager class wrapping Scene snapshot-based undo/redo with forward history support
+- All 57 tests pass, TypeScript typecheck passes, ESLint passes
+- **Learnings for future iterations:**
+  - Vitest uses jsdom environment for DOM APIs; `structuredClone` works in jsdom for deep cloning
+  - Test helper functions (makeRect) should be defined in test files to avoid unused import warnings with `noUnusedLocals: true`
+  - HistoryManager stores snapshots AFTER each action; undo pops the last saved state and restores it
+  - Multiple push() calls create a stack of states; each undo pops one state
+  - forwardHistory enables redo by storing the state that was just undone from
+---
+
+## [2026-04-14] - v2.1-refactor-008
+- Implemented unified zoom control with View Transform system
+- Changes:
+  - App.tsx: replaced separate handleZoomIn/handleZoomOut with unified setZoom(newValue) function. setZoom clamps value to [0.1, 5], computes scaleRatio from viewport center, adjusts panX/panY proportionally. BottomPanel calls setZoom directly with computed zoom level (scale ± 0.25).
+  - BottomPanel.tsx: replaced onZoomIn/onZoomOut props with single onZoom: (value: number) => void. Zoom buttons compute and pass target zoom value directly.
+  - CanvasComponent.tsx: added state-driven redraw trigger — useEffect on [scale, panX, panY] calls renderStaticScene + renderInteractive to update canvas layers when zoom changes from button clicks.
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - Wheel zoom and button zoom use different code paths: wheel updates refs directly for immediate jitter-free rendering, buttons update React state which triggers re-render and canvas redraw
+  - The redraw trigger useEffect must be placed after ref sync effects so refs are already updated when redraw reads current transform values
+  - setZoom uses functional state updater for scale to avoid stale closure issues, but reads scale directly in handleZoomIn/handleZoomOut — fine for button clicks since each click gets the latest state value
 ---
