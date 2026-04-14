@@ -8,7 +8,7 @@ import {
   createBBoxHandler,
   createLineHandler,
   createFreehandHandler,
-  EraserHandler,
+  createEraserHandler,
 } from '../core/tools';
 
 // Map solid tool variants to base shape types for drawing/hit-testing logic
@@ -144,9 +144,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // Image cache
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
-  // Pixel-based eraser state
-  const eraserPoints = useRef<Point[]>([]);
-  const lastEraserPoint = useRef<Point | null>(null);
+  // Object-level eraser handler
+  const eraserHandlerRef = useRef<ReturnType<typeof createEraserHandler> | null>(null);
   const mousePos = useRef<Point>({ x: 0, y: 0 });
 
   // Draft element for ToolHandler-based drawing
@@ -591,29 +590,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       }
     }
 
-    // Eraser: pixel-level erasing on interactive canvas
-    if (interactionMode === 'drawing' && activeTool === 'eraser' && eraserPoints.current.length > 0) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (const pt of eraserPoints.current) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,1)';
-        ctx.fill();
-      }
-      if (eraserPoints.current.length > 1) {
-        ctx.lineWidth = eraserRadius * 2;
-        ctx.strokeStyle = 'rgba(0,0,0,1)';
-        ctx.beginPath();
-        ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
-        for (let i = 1; i < eraserPoints.current.length; i++) {
-          ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
+    // Eraser: draw red dashed highlight borders around hit elements
+    if (interactionMode === 'drawing' && activeTool === 'eraser' && eraserHandlerRef.current) {
+      const hitIds = eraserHandlerRef.current.getHitElementIds();
+      if (hitIds.size > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2 / scaleRef.current;
+        ctx.setLineDash([8 / scaleRef.current, 6 / scaleRef.current]);
+        for (const el of scene.getElements()) {
+          if (!el.isDeleted && hitIds.has(el.id)) {
+            const b = getElementBounds(el);
+            ctx.strokeRect(b.x, b.y, b.width, b.height);
+          }
         }
-        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
       }
-      ctx.restore();
     }
 
     // Draw selection bounding boxes and resize handles
@@ -645,7 +638,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, applyCanvasTransform, drawShape]);
+  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, applyCanvasTransform, drawShape]);
 
   // Master redraw
   const redrawCanvas = useCallback(() => {
@@ -689,7 +682,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       case 'freehand':
         return createFreehandHandler(style);
       default:
-        return EraserHandler;
+        // Eraser and select are handled separately in pointer handlers
+        return createFreehandHandler(style);
     }
   }, [activeTool, defaultStyle]);
 
@@ -1111,8 +1105,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     // Eraser tool
     if (activeTool === 'eraser') {
       isDrawing.current = true;
-      eraserPoints.current = [world];
-      lastEraserPoint.current = world;
+      eraserHandlerRef.current = createEraserHandler(() => scene.getElements());
+      eraserHandlerRef.current.onPointerDown(world.x, world.y, setDraft);
       setInteractionMode('drawing');
       return;
     }
@@ -1169,24 +1163,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     mousePos.current = point;
 
     if (interactionMode === 'drawing') {
-      // Eraser: track points for pixel-level erasing
-      if (activeTool === 'eraser') {
-        const prev = lastEraserPoint.current;
-        if (prev) {
-          const dx = point.x - prev.x;
-          const dy = point.y - prev.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const step = Math.max(1, eraserRadius / 3);
-          const numSteps = Math.max(1, Math.ceil(dist / step));
-          for (let i = 1; i <= numSteps; i++) {
-            const t = i / numSteps;
-            eraserPoints.current.push({
-              x: prev.x + dx * t,
-              y: prev.y + dy * t,
-            });
-          }
-        }
-        lastEraserPoint.current = point;
+      // Eraser: track points and check for element hits
+      if (activeTool === 'eraser' && eraserHandlerRef.current) {
+        eraserHandlerRef.current.onPointerMove(point.x, point.y, null, setDraft);
         redrawCanvas();
         return;
       }
@@ -1361,10 +1340,20 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     if (interactionMode === 'drawing') {
       isDrawing.current = false;
 
-      // Eraser: finalize pixel erase (shapes data unchanged)
-      if (activeTool === 'eraser') {
-        eraserPoints.current = [];
-        lastEraserPoint.current = null;
+      // Eraser: delete all hit elements in one batch
+      if (activeTool === 'eraser' && eraserHandlerRef.current) {
+        const hitIds = eraserHandlerRef.current.finish();
+        if (hitIds.size > 0) {
+          for (const id of hitIds) {
+            const el = scene.getElement(id);
+            if (el && !el.isDeleted) {
+              scene.updateElement(id, { isDeleted: true });
+            }
+          }
+          onSceneMutate('update');
+          redrawCanvas();
+        }
+        eraserHandlerRef.current = null;
         setInteractionMode('idle');
         return;
       }

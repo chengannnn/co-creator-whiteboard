@@ -726,3 +726,25 @@ Started: Sun Apr 12 16:08:46     2026
   - createBBoxHandler is a shared factory for rectangle, ellipse, and rhombus — any bbox-related fixes apply to all three at once
   - The normalization pattern (Math.min for origin, Math.abs for dimensions) is the standard approach for drag-to-draw bounding box interactions
 ---
+
+## [2026-04-14 18:00] - US-003
+- Implemented object-level eraser with hit testing
+- Changes:
+  - **core/hitTesting.ts** (NEW): `pointInBoundingBox(px, py, element)` helper, `getWorldBounds(el)` for computing element bounds, `findElementsAtPoint(px, py, elements)` for reverse-order hit testing, `interpolatePoints(prev, curr, step)` for smooth point sampling
+  - **core/tools/EraserHandler.ts**: Rewrote from stub to factory `createEraserHandler(getElements)`. Tracks hit element IDs via internal Set, uses point interpolation for smooth hit detection across pointer move events. `finish()` returns hit IDs and clears state. `getHitElementIds()` returns current hits for rendering
+  - **core/tools/index.ts**: Updated export from `EraserHandler` to `createEraserHandler`
+  - **CanvasComponent.tsx**:
+    - Replaced `eraserPoints`/`lastEraserPoint` refs with `eraserHandlerRef`
+    - onPointerDown: creates eraser handler with scene elements getter
+    - onPointerMove: delegates to handler, triggers redraw for highlights
+    - onPointerUp: calls `finish()`, deletes all hit elements via `scene.updateElement(id, { isDeleted: true })`, pushes single history snapshot via `onSceneMutate('update')`, redraws static scene
+    - renderInteractive: draws red dashed border (`strokeRect`) around hit elements instead of pixel-level white circles
+    - Removed old pixel-erase rendering logic (`destination-out`, arc fills, line strokes)
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - EraserHandler uses a factory pattern with `getElements` callback since ToolHandler interface doesn't support extra parameters — this avoids changing the interface while giving the handler scene access
+  - Hit elements are tracked incrementally during pointerMove (not just at pointerUp), enabling the "touch to preview deletion" interaction pattern
+  - Single history snapshot for multi-element eraser stroke: all deletions happen in one batch before onSceneMutate is called
+  - The eraser cursor overlay div in the React JSX layer still uses eraserRadius prop for the visual indicator circle — this is separate from the canvas hit testing
+---
