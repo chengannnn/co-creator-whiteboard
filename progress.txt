@@ -507,3 +507,17 @@ Started: Sun Apr 12 16:08:46     2026
   - useImperativeHandle is used to expose undo/redo to parent so BottomPanel can trigger them without prop drilling through CanvasComponent
   - Undo/redo buttons use the same capsule container style (zoomBg, borderRadius: '12px') as the zoom control for visual consistency
   - Button disabled state uses theme.textMuted color and cursor: 'default' to clearly indicate non-interactivity
+
+## [2026-04-14] - v2.1-refactor-001
+- Implemented SceneElement type system to replace old Shape types
+- Files changed:
+  - packages/frontend/src/types/element.ts: new file with BaseElement interface (22 fields), 8 element subtypes (RectangleElement, EllipseElement, RhombusElement, LineElement, ArrowElement, FreehandElement, TextElement, ImageElement), SceneElement union type, DraftElement interface, ToolHandler interface
+  - LineElement and ArrowElement use points: Point[] array with startArrowhead/endArrowhead fields
+  - TextElement includes content, fontSize, fontFamily, textAlign, verticalAlign, lineHeight
+  - ImageElement includes src (string) and fileId (string | null)
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - BaseElement uses flat style fields (strokeColor, strokeWidth, etc.) instead of nested ShapeStyle — all style properties are at the top level
+  - ToolHandler interface uses setDraft/commitElement callbacks rather than returning values directly — enables async patterns and React integration
+  - Arrowhead types support 'arrow', 'bar', 'dot', 'inverted_triangle' for future extensibility
+  - types/shapes.ts is NOT deleted yet — subsequent stories will migrate imports before removal
