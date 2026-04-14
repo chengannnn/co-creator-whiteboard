@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHand
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
-import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point } from '../types/element';
+import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 import {
   createBBoxHandler,
@@ -74,6 +74,7 @@ interface CanvasComponentProps {
   onSceneMutate: (action: 'add' | 'update' | 'delete' | 'replaceAll' | 'clear') => void;
   /** Called to apply intermediate move/resize results (updates scene + triggers mutate) */
   onMoveElements: (elements: SceneElement[]) => void;
+  isRoundCornerEnabled: boolean;
 }
 
 export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function CanvasComponent({
@@ -98,6 +99,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   defaultStyle,
   onSceneMutate,
   onMoveElements,
+  isRoundCornerEnabled,
 }: CanvasComponentProps, ref) {
   const theme = getThemeColors(themeMode);
   // Three-layer canvas references
@@ -365,9 +367,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     };
 
     switch (element.type) {
-      case 'rectangle':
-        rc.rectangle(element.x, element.y, element.width, element.height, opts);
+      case 'rectangle': {
+        /* eslint-disable @typescript-eslint/no-explicit-any -- rough.js supports borderRadius as an undocumented option */
+        const rectOpts = { ...opts, borderRadius: (element as RectangleElement).borderRadius ?? 0 };
+        rc.rectangle(element.x, element.y, element.width, element.height, rectOpts as any);
+        /* eslint-enable @typescript-eslint/no-explicit-any */
         break;
+      }
 
       case 'ellipse':
         rc.ellipse(
@@ -384,15 +390,29 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const cy = element.y + element.height / 2;
         const hw = Math.abs(element.width) / 2;
         const hh = Math.abs(element.height) / 2;
-        rc.polygon(
-          [
-            [cx, cy - hh],
-            [cx + hw, cy],
-            [cx, cy + hh],
-            [cx - hw, cy],
-          ],
-          opts,
-        );
+        const rhombusBorderRadius = (element as RhombusElement).borderRadius ?? 0;
+        if (rhombusBorderRadius > 0) {
+          // Draw a rounded rectangle rotated by 45 degrees to create a rounded rhombus
+          const side = Math.min(hw, hh) * Math.sqrt(2);
+          /* eslint-disable @typescript-eslint/no-explicit-any -- rough.js supports borderRadius and rotation as undocumented options */
+          rc.rectangle(cx - side, cy - side, side * 2, side * 2, {
+            ...opts,
+            borderRadius: rhombusBorderRadius,
+            rotation: Math.PI / 4,
+            roughness: opts.roughness,
+          } as any);
+          /* eslint-enable @typescript-eslint/no-explicit-any */
+        } else {
+          rc.polygon(
+            [
+              [cx, cy - hh],
+              [cx + hw, cy],
+              [cx, cy + hh],
+              [cx - hw, cy],
+            ],
+            opts,
+          );
+        }
         break;
       }
 
@@ -660,12 +680,14 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   }, [renderInteractive]);
 
   const createDrawingHandler = useCallback((): ToolHandlerType => {
+    const isRoundCapable = activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
     const style = {
       strokeColor: defaultStyle.strokeColor,
       strokeWidth: defaultStyle.strokeWidth,
       strokeStyle: defaultStyle.strokeStyle,
       fillStyle: defaultStyle.fillStyle,
       fillColor: defaultStyle.fillColor,
+      borderRadius: isRoundCapable && isRoundCornerEnabled ? 12 : 0,
     };
     const baseTool = getBaseShapeTool(activeTool);
     switch (baseTool) {
@@ -685,7 +707,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         // Eraser and select are handled separately in pointer handlers
         return createFreehandHandler(style);
     }
-  }, [activeTool, defaultStyle]);
+  }, [activeTool, defaultStyle, isRoundCornerEnabled]);
 
   /**
    * Commit a SceneElement to the scene. Adds to scene, pushes history, triggers redraw.

@@ -46,6 +46,7 @@ export interface BaseElement {
 
 export interface RectangleElement extends BaseElement {
   type: 'rectangle';
+  borderRadius?: number;
 }
 
 export interface EllipseElement extends BaseElement {
@@ -54,6 +55,7 @@ export interface EllipseElement extends BaseElement {
 
 export interface RhombusElement extends BaseElement {
   type: 'rhombus';
+  borderRadius?: number;
 }
 
 export interface LineElement extends BaseElement {

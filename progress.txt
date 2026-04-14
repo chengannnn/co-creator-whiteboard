@@ -782,3 +782,21 @@ Started: Sun Apr 12 16:08:46     2026
   - The `canRoundCorner` check is centralized in UnifiedToolbar based on `activeTool` — this ensures the button state updates reactively when activeTool changes without additional wiring
   - Using `disabled` attribute on the button prevents clicks while keeping the button visible (gray/semi-transparent) — important for UX to show the feature exists even when unavailable
 ---
+
+## [2026-04-14 18:12] - US-006
+- Implemented round corner global preset for newly drawn shapes
+- Changes:
+  - types/element.ts: Added `borderRadius?: number` field to RectangleElement and RhombusElement interfaces
+  - core/tools/RectangleHandler.ts: DrawStyle interface extended with optional borderRadius; createBBoxHandler applies borderRadius to new shapes in onPointerDown (preserved through onPointerMove/onPointerUp via spread)
+  - CanvasComponent.tsx: createDrawingHandler computes borderRadius (12 when isRoundCornerEnabled for rectangle/rhombus tools, 0 otherwise) and passes it through style to createBBoxHandler
+  - Static Canvas rendering:
+    - Rectangle: passes borderRadius to rough.js rc.rectangle() options
+    - Rhombus: when borderRadius > 0, draws a rotated rounded rectangle (45° rotation) using rc.rectangle() with borderRadius; otherwise uses rc.polygon() for sharp rhombus
+  - CanvasComponentProps interface extended with isRoundCornerEnabled; App.tsx passes it through
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - rough.js supports `borderRadius` as an option for rc.rectangle(), but it's not in the TypeScript type definitions — needs `as any` cast with eslint-disable
+  - rough.js does NOT support borderRadius for rc.polygon() — for rounded rhombus, use a rotated rounded rectangle approach (rc.rectangle with rotation: Math.PI/4)
+  - borderRadius is only applicable to rectangle and rhombus element types — ellipse, line, freehand, text, and image do not support it
+---

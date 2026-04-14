@@ -549,6 +549,7 @@ function WhiteboardRoom() {
         themeMode={themeMode}
         onSceneMutate={onSceneMutate}
         onMoveElements={onMoveElements}
+        isRoundCornerEnabled={isRoundCornerEnabled}
       />
       <BottomPanel
         roomId={roomId ?? 'unknown'}

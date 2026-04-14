@@ -9,6 +9,7 @@ interface DrawStyle {
   strokeStyle: StrokeStyle;
   fillStyle: FillStyle;
   fillColor: string;
+  borderRadius?: number;
 }
 
 /**
@@ -18,7 +19,8 @@ export function createBBoxHandler(type: 'rectangle' | 'ellipse' | 'rhombus', sty
   return {
     onPointerDown(worldX: number, worldY: number, setDraft: (draft: DraftElement | null) => void): void {
       const base = createBaseElement(type, worldX, worldY, style);
-      setDraft(createDraft(base as SceneElement));
+      const el = { ...base, borderRadius: style.borderRadius ?? 0 } as SceneElement;
+      setDraft(createDraft(el));
     },
 
     onPointerMove(
