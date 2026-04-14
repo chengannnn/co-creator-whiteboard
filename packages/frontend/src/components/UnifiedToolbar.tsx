@@ -5,6 +5,21 @@ import { getThemeColors, type ThemeMode } from '../theme';
 // Map strokeWidth values to eraser radius sizes
 const ERASER_RADIUS_MAP: Record<number, number> = { 1: 10, 2: 20, 4: 40 };
 
+/** SVG icon for selection tool (standard cursor pointer). */
+const SelectIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+  </svg>
+);
+
+/** SVG icon for eraser tool (tilted classic eraser). */
+const EraserIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14.8 1.4c.8-.8 2-.8 2.8 0l5 5c.8.8.8 2 0 2.8L11 20" />
+    <line x1="6" y1="16" x2="18" y2="4" />
+  </svg>
+);
+
 const UNIFIED_COLORS = [
   '#000000', // black
   '#e03131', // red
@@ -21,13 +36,12 @@ const UNIFIED_COLORS = [
 type ShapeTool = {
   id: ToolType;
   label: string;
-  icon: string;
+  icon: string | React.FC;
   shortcut: string;
   fillStyle?: FillStyle;
 };
 
 const TOOLS: ShapeTool[] = [
-  { id: 'select', label: 'Select', icon: '◇', shortcut: 'V' },
   { id: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R', fillStyle: 'none' },
   { id: 'rectangle-solid', label: 'Rectangle', icon: '▮', shortcut: 'R', fillStyle: 'solid' },
   { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O', fillStyle: 'none' },
@@ -37,7 +51,7 @@ const TOOLS: ShapeTool[] = [
   { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
   { id: 'arrow', label: 'Arrow', icon: '→', shortcut: 'A' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
-  { id: 'eraser', label: 'Eraser', icon: '◻', shortcut: 'X' },
+  { id: 'eraser', label: 'Eraser', icon: EraserIcon, shortcut: 'X' },
 ];
 
 interface UnifiedToolbarProps {
@@ -218,7 +232,40 @@ export default function UnifiedToolbar({
           {locked ? '🔒' : '🔓'}
         </button>
 
-        {/* Divider after lock/drag controls */}
+        {/* Selection tool — immediately after lock toggle */}
+        <button
+          title="Select (V)"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToolChange('select');
+          }}
+          style={{
+            width: '32px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: activeTool === 'select' ? `2px solid ${theme.btnActiveBorder}` : '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: activeTool === 'select' ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: 'pointer',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            if (activeTool !== 'select') {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = activeTool === 'select' ? theme.btnActiveBg : theme.btnDefaultBg;
+          }}
+        >
+          <SelectIcon />
+        </button>
+
+        {/* Divider after lock/select controls, separating from drawing tools */}
         <div
           style={{
             width: '1px',
@@ -265,7 +312,7 @@ export default function UnifiedToolbar({
               }
             }}
           >
-            {tool.icon}
+            {typeof tool.icon === 'function' ? <tool.icon /> : tool.icon}
           </button>
         ))}
 

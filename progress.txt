@@ -748,3 +748,20 @@ Started: Sun Apr 12 16:08:46     2026
   - Single history snapshot for multi-element eraser stroke: all deletions happen in one batch before onSceneMutate is called
   - The eraser cursor overlay div in the React JSX layer still uses eraserRadius prop for the visual indicator circle — this is separate from the canvas hit testing
 ---
+
+## [2026-04-14 18:03] - US-004
+- Updated toolbar SVG icons for selection and eraser tools
+- Changes:
+  - UnifiedToolbar.tsx: Added `SelectIcon` SVG component (standard cursor pointer path) and `EraserIcon` SVG component (tilted classic eraser shape)
+  - Select tool moved out of TOOLS array and rendered as standalone button immediately after lock toggle
+  - Divider repositioned after select tool, separating it from drawing tools
+  - ShapeTool.icon type changed from `string` to `string | React.FC` to support both Unicode text icons and SVG component icons
+  - TOOLS.map renders icon via `{typeof tool.icon === 'function' ? <tool.icon /> : tool.icon}`
+  - Eraser tool in TOOLS array now uses EraserIcon function component
+  - All SVG icons use `currentColor` stroke for proper light/dark theme adaptation
+- TypeScript strict mode and ESLint pass
+- All 57 tests pass
+- **Learnings for future iterations:**
+  - SVG icons in toolbar use `currentColor` for stroke/fill — this automatically adapts to `theme.textPrimary` set on the button, working correctly in both light and dark modes without extra logic
+  - The select tool is now rendered separately from the TOOLS map since it has special positioning requirements (after lock, before drawing tools)
+---
