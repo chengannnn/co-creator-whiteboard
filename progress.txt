@@ -521,3 +521,14 @@ Started: Sun Apr 12 16:08:46     2026
   - ToolHandler interface uses setDraft/commitElement callbacks rather than returning values directly — enables async patterns and React integration
   - Arrowhead types support 'arrow', 'bar', 'dot', 'inverted_triangle' for future extensibility
   - types/shapes.ts is NOT deleted yet — subsequent stories will migrate imports before removal
+
+## [2026-04-14] - v2.1-refactor-002
+- Implemented Scene class with Map-based element storage
+- Files changed:
+  - packages/frontend/src/core/Scene.ts: new Scene class with private Map<string, SceneElement>, getElements() (filtered + sorted by index), getElement() O(1), addElement(), updateElement() (merges + increments version + updates timestamp), deleteElement() (sets isDeleted=true, keeps in map), restoreElement(), replaceAll(), snapshot() (deep copy via structuredClone), getBoundingBox() (computes min bounding box of non-deleted elements, handles both bbox-based and points-based elements)
+- TypeScript strict mode and ESLint pass
+- **Learnings for future iterations:**
+  - `structuredClone` is available in modern browsers for deep copying — simpler than JSON.parse(JSON.stringify())
+  - Union type spread with `Partial<T>` requires `as SceneElement` cast because TypeScript can't narrow the intersection of a spread union
+  - getBoundingBox() handles both bbox-based elements (rectangle, ellipse, rhombus, text, image) and points-based elements (line, arrow, freehand) by checking `el.type`
+---
