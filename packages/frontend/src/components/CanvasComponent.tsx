@@ -1,8 +1,14 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { ToolType, Shape, Point, ShapeStyle, DEFAULT_STYLE, TextShape, LineShape, RhombusShape, ArrowShape } from '../types/shapes';
-import type { SceneElement, StrokeWidth } from '../types/element';
+import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
+import {
+  createBBoxHandler,
+  createLineHandler,
+  createFreehandHandler,
+  EraserHandler,
+} from '../core/tools';
 
 interface CanvasComponentProps {
   activeTool: ToolType;
@@ -152,7 +158,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
   const startPoint = useRef<Point>({ x: 0, y: 0 });
-  const currentPoints = useRef<Point[]>([]);
 
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('idle');
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
@@ -194,6 +199,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const eraserPoints = useRef<Point[]>([]);
   const lastEraserPoint = useRef<Point | null>(null);
   const mousePos = useRef<Point>({ x: 0, y: 0 });
+
+  // Draft element for ToolHandler-based drawing
+  const draftRef = useRef<DraftElement | null>(null);
+  const activeHandlerRef = useRef<ToolHandlerType | null>(null);
 
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
@@ -815,47 +824,38 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     ctx.save();
     applyCanvasTransform(ctx);
 
-    // Draw draft element if drawing (uses refs updated by handleMouseMove)
-    if (interactionMode === 'drawing') {
-      const baseTool = getBaseShapeTool(activeTool);
-      if (baseTool === 'freehand' && currentPoints.current.length > 1) {
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = getStrokeColor(DEFAULT_STYLE.strokeColor, themeMode);
-        ctx.lineWidth = DEFAULT_STYLE.strokeWidth;
+    // Draw draft element if drawing (uses draft from ToolHandler)
+    if (interactionMode === 'drawing' && draftRef.current) {
+      const rc = roughCanvasRef.current;
+      if (rc) {
+        const draftEl = draftRef.current.element;
+        drawShape(rc, draftEl, themeMode);
+      }
+    }
+
+    // Eraser: pixel-level erasing on interactive canvas
+    if (interactionMode === 'drawing' && activeTool === 'eraser' && eraserPoints.current.length > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const pt of eraserPoints.current) {
         ctx.beginPath();
-        ctx.moveTo(currentPoints.current[0].x, currentPoints.current[0].y);
-        for (let i = 1; i < currentPoints.current.length; i++) {
-          ctx.lineTo(currentPoints.current[i].x, currentPoints.current[i].y);
+        ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.fill();
+      }
+      if (eraserPoints.current.length > 1) {
+        ctx.lineWidth = eraserRadius * 2;
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+        ctx.beginPath();
+        ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
+        for (let i = 1; i < eraserPoints.current.length; i++) {
+          ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
         }
         ctx.stroke();
-        ctx.restore();
-      } else if (baseTool === 'eraser' && eraserPoints.current.length > 0) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        for (const pt of eraserPoints.current) {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, eraserRadius, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0,0,0,1)';
-          ctx.fill();
-        }
-        if (eraserPoints.current.length > 1) {
-          ctx.lineWidth = eraserRadius * 2;
-          ctx.strokeStyle = 'rgba(0,0,0,1)';
-          ctx.beginPath();
-          ctx.moveTo(eraserPoints.current[0].x, eraserPoints.current[0].y);
-          for (let i = 1; i < eraserPoints.current.length; i++) {
-            ctx.lineTo(eraserPoints.current[i].x, eraserPoints.current[i].y);
-          }
-          ctx.stroke();
-        }
-        ctx.restore();
       }
-      // Note: rectangle/ellipse/rhombus/line/arrow previews are drawn directly in handleMouseMove
-      // on the interactive canvas during drag, avoiding the need for intermediate point refs
+      ctx.restore();
     }
 
     // Draw selection bounding boxes and resize handles
@@ -886,15 +886,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-
-    // Pixel-based eraser on interactive canvas during eraser drag
-    if (interactionMode === 'drawing' && activeTool === 'eraser' && eraserPoints.current.length > 0) {
-      const rc = roughCanvasRef.current;
-      if (rc) {
-        renderStaticScene();
-      }
-    }
-  }, [interactionMode, activeTool, selectedIds, shapes, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, renderStaticScene, applyCanvasTransform]);
+  }, [interactionMode, activeTool, selectedIds, shapes, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, eraserRadius, renderStaticScene, applyCanvasTransform, drawShape]);
 
   // Master redraw — redraws static and interactive layers
   const redrawCanvas = useCallback(() => {
@@ -908,6 +900,165 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     renderStaticScene();
     renderInteractive();
   }, [renderBackground, renderStaticScene, renderInteractive]);
+
+  // --- ToolHandler integration ---
+
+  /**
+   * Set the current draft element and trigger interactive canvas redraw.
+   */
+  const setDraft = useCallback((draft: DraftElement | null) => {
+    draftRef.current = draft;
+    renderInteractive();
+  }, [renderInteractive]);
+
+  /**
+   * Create a ToolHandler for the given tool type with the current defaultStyle.
+   */
+  const createDrawingHandler = useCallback((): ToolHandlerType => {
+    const style = {
+      strokeColor: defaultStyle.strokeColor,
+      strokeWidth: defaultStyle.strokeWidth,
+      strokeStyle: defaultStyle.strokeStyle,
+      fillStyle: defaultStyle.fillStyle,
+      fillColor: defaultStyle.fillColor,
+    };
+    const baseTool = getBaseShapeTool(activeTool);
+    switch (baseTool) {
+      case 'rectangle':
+        return createBBoxHandler('rectangle', style);
+      case 'ellipse':
+        return createBBoxHandler('ellipse', style);
+      case 'rhombus':
+        return createBBoxHandler('rhombus', style);
+      case 'line':
+        return createLineHandler('line', style);
+      case 'arrow':
+        return createLineHandler('arrow', style, { endArrowhead: 'arrow' });
+      case 'freehand':
+        return createFreehandHandler(style);
+      default:
+        return EraserHandler;
+    }
+  }, [activeTool, defaultStyle]);
+
+  /**
+   * Commit a SceneElement to the shapes state.
+   * Converts SceneElement back to Shape format for backward compatibility.
+   */
+  const commitElement = useCallback((el: SceneElement) => {
+    let newShape: Shape | null = null;
+
+    switch (el.type) {
+      case 'rectangle':
+        newShape = {
+          id: el.id,
+          type: 'rectangle',
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        };
+        break;
+      case 'ellipse':
+        newShape = {
+          id: el.id,
+          type: 'ellipse',
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        };
+        break;
+      case 'rhombus':
+        newShape = {
+          id: el.id,
+          type: 'rhombus',
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        } as RhombusShape;
+        break;
+      case 'line': {
+        const pts = el.points;
+        newShape = {
+          id: el.id,
+          type: 'line',
+          startX: el.x + (pts[0]?.x ?? 0),
+          startY: el.y + (pts[0]?.y ?? 0),
+          endX: el.x + (pts[1]?.x ?? 0),
+          endY: el.y + (pts[1]?.y ?? 0),
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        } as LineShape;
+        break;
+      }
+      case 'arrow': {
+        const pts = el.points;
+        newShape = {
+          id: el.id,
+          type: 'arrow',
+          startX: el.x + (pts[0]?.x ?? 0),
+          startY: el.y + (pts[0]?.y ?? 0),
+          endX: el.x + (pts[1]?.x ?? 0),
+          endY: el.y + (pts[1]?.y ?? 0),
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        } as ArrowShape;
+        break;
+      }
+      case 'freehand':
+        newShape = {
+          id: el.id,
+          type: 'freehand',
+          points: el.points.map((p) => ({ x: p.x + el.x, y: p.y + el.y })),
+          style: {
+            strokeColor: el.strokeColor,
+            strokeWidth: el.strokeWidth,
+            strokeStyle: el.strokeStyle,
+            fillStyle: el.fillStyle,
+            fillColor: el.fillColor,
+          },
+        };
+        break;
+    }
+
+    if (newShape) {
+      pushHistory([...shapes, newShape]);
+      onSelectedIdsChange([newShape.id]);
+    }
+  }, [shapes, pushHistory, onSelectedIdsChange]);
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
@@ -1389,10 +1540,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     if (activeTool !== 'select') {
-      // Drawing mode
+      // Drawing mode — delegate to ToolHandler
       isDrawing.current = true;
-      startPoint.current = world;
-      currentPoints.current = [world];
+      activeHandlerRef.current = createDrawingHandler();
+      activeHandlerRef.current.onPointerDown(world.x, world.y, setDraft);
       setInteractionMode('drawing');
       return;
     }
@@ -1454,88 +1605,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         return;
       }
 
-      broadcastCursor(point.x, point.y, true);
-      if (activeTool === 'freehand') {
-        currentPoints.current.push(point);
-        redrawCanvas();
-
-        // Draw freehand preview on interactive canvas
-        const ctx = interactiveCanvasRef.current?.getContext('2d');
-        if (ctx && currentPoints.current.length > 1) {
-          ctx.save();
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.strokeStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
-          ctx.lineWidth = defaultStyle.strokeWidth;
-          ctx.beginPath();
-          ctx.moveTo(currentPoints.current[0].x, currentPoints.current[0].y);
-          for (let i = 1; i < currentPoints.current.length; i++) {
-            ctx.lineTo(currentPoints.current[i].x, currentPoints.current[i].y);
-          }
-          ctx.stroke();
-          ctx.restore();
-        }
-      } else {
-        redrawCanvas();
-
-        // Draw shape preview on interactive canvas
-        const ctx = interactiveCanvasRef.current?.getContext('2d');
-        if (!ctx) return;
-        const start = startPoint.current;
-        const x = Math.min(start.x, point.x);
-        const y = Math.min(start.y, point.y);
-        const width = Math.abs(point.x - start.x);
-        const height = Math.abs(point.y - start.y);
-
-        const baseTool = getBaseShapeTool(activeTool);
-        ctx.save();
-        ctx.strokeStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
-        ctx.lineWidth = defaultStyle.strokeWidth;
-        if (defaultStyle.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
-
-        if (baseTool === 'rectangle') {
-          ctx.strokeRect(x, y, width, height);
-        } else if (baseTool === 'ellipse') {
-          ctx.beginPath();
-          ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (baseTool === 'rhombus') {
-          const cx = x + width / 2;
-          const cy = y + height / 2;
-          const hw = width / 2;
-          const hh = height / 2;
-          ctx.beginPath();
-          ctx.moveTo(cx, cy - hh);
-          ctx.lineTo(cx + hw, cy);
-          ctx.lineTo(cx, cy + hh);
-          ctx.lineTo(cx - hw, cy);
-          ctx.closePath();
-          ctx.stroke();
-        } else if (baseTool === 'line') {
-          ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(point.x, point.y);
-          ctx.stroke();
-        } else if (baseTool === 'arrow') {
-          ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(point.x, point.y);
-          ctx.stroke();
-          // Draw arrowhead preview
-          const angle = Math.atan2(point.y - start.y, point.x - start.x);
-          const arrowheadSize = defaultStyle.strokeWidth * 3;
-          ctx.fillStyle = getStrokeColor(defaultStyle.strokeColor, themeMode);
-          ctx.translate(point.x, point.y);
-          ctx.rotate(angle);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(-arrowheadSize, -arrowheadSize / 2);
-          ctx.lineTo(-arrowheadSize, arrowheadSize / 2);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.restore();
+      // Delegate to ToolHandler for drawing tools
+      const handler = activeHandlerRef.current;
+      if (handler) {
+        handler.onPointerMove(point.x, point.y, draftRef.current, setDraft);
       }
+
+      broadcastCursor(point.x, point.y, true);
       return;
     }
 
@@ -1711,91 +1787,29 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       target.releasePointerCapture(e.pointerId);
     }
 
-    const point = getWorldPoint(e);
-
     if (interactionMode === 'drawing') {
       isDrawing.current = false;
 
       // Eraser: finalize pixel erase (shapes data unchanged in MVP scope)
       if (activeTool === 'eraser') {
+        eraserPoints.current = [];
+        lastEraserPoint.current = null;
         setInteractionMode('idle');
         return;
       }
 
-      const start = startPoint.current;
-      let newShape: Shape | null = null;
-
-      const baseTool = getBaseShapeTool(activeTool);
-
-      if (baseTool === 'rectangle') {
-        const x = Math.min(start.x, point.x);
-        const y = Math.min(start.y, point.y);
-        const width = Math.abs(point.x - start.x);
-        const height = Math.abs(point.y - start.y);
-        if (width > 3 && height > 3) {
-          newShape = { id: generateId(), type: 'rectangle', x, y, width, height, style: { ...defaultStyle } };
-        }
-      } else if (baseTool === 'ellipse') {
-        const x = Math.min(start.x, point.x);
-        const y = Math.min(start.y, point.y);
-        const width = Math.abs(point.x - start.x);
-        const height = Math.abs(point.y - start.y);
-        if (width > 3 && height > 3) {
-          newShape = { id: generateId(), type: 'ellipse', x, y, width, height, style: { ...defaultStyle } };
-        }
-      } else if (baseTool === 'rhombus') {
-        const x = Math.min(start.x, point.x);
-        const y = Math.min(start.y, point.y);
-        const width = Math.abs(point.x - start.x);
-        const height = Math.abs(point.y - start.y);
-        if (width > 3 && height > 3) {
-          newShape = { id: generateId(), type: 'rhombus', x, y, width, height, style: { ...defaultStyle } } as RhombusShape;
-        }
-      } else if (activeTool === 'freehand') {
-        if (currentPoints.current.length > 2) {
-          newShape = {
-            id: generateId(),
-            type: 'freehand',
-            points: [...currentPoints.current],
-            style: { ...defaultStyle },
-          };
-        }
-      } else if (activeTool === 'line') {
-        const dx = Math.abs(point.x - start.x);
-        const dy = Math.abs(point.y - start.y);
-        if (dx > 3 || dy > 3) {
-          newShape = {
-            id: generateId(),
-            type: 'line',
-            startX: start.x,
-            startY: start.y,
-            endX: point.x,
-            endY: point.y,
-            style: { ...defaultStyle },
-          } as LineShape;
-        }
-      } else if (activeTool === 'arrow') {
-        const dx = Math.abs(point.x - start.x);
-        const dy = Math.abs(point.y - start.y);
-        if (dx > 3 || dy > 3) {
-          newShape = {
-            id: generateId(),
-            type: 'arrow',
-            startX: start.x,
-            startY: start.y,
-            endX: point.x,
-            endY: point.y,
-            style: { ...defaultStyle },
-          } as ArrowShape;
+      // Delegate to ToolHandler for drawing tools
+      const handler = activeHandlerRef.current;
+      if (handler) {
+        const result = handler.onPointerUp(draftRef.current, commitElement);
+        if (!result) {
+          redrawCanvas();
         }
       }
 
-      if (newShape) {
-        pushHistory([...shapes, newShape]);
-        onSelectedIdsChange([newShape.id]);
-      } else {
-        redrawCanvas();
-      }
+      // Clear draft state
+      draftRef.current = null;
+      activeHandlerRef.current = null;
 
       setInteractionMode('idle');
       return;
