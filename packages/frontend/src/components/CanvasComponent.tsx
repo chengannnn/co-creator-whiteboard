@@ -1080,9 +1080,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
 
       const currentScale = scaleRef.current;
       const currentPanX = panXRef.current;
@@ -1090,9 +1087,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const delta = -e.deltaY * ZOOM_FACTOR;
       const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentScale + delta));
 
-      const scaleRatio = newScale / currentScale;
-      const newPanX = mouseX - (mouseX - currentPanX) * scaleRatio;
-      const newPanY = mouseY - (mouseY - currentPanY) * scaleRatio;
+      // Viewport-center-based zoom: keep viewport center anchored to same world coordinates
+      const viewportCenterX = canvas.width / 2;
+      const viewportCenterY = canvas.height / 2;
+      const worldX = (viewportCenterX - currentPanX) / currentScale;
+      const worldY = (viewportCenterY - currentPanY) / currentScale;
+      const newPanX = viewportCenterX - worldX * newScale;
+      const newPanY = viewportCenterY - worldY * newScale;
 
       scaleRef.current = newScale;
       panXRef.current = newPanX;
