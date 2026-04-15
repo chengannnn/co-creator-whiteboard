@@ -141,3 +141,18 @@ Started: Tue Apr 15 2026
   - This can also be expressed as: `newPanX = viewportCenterX - (viewportCenterX - oldPanX) * scaleRatio` (algebraically equivalent)
   - There are two zoom paths: wheel handler in CanvasComponent (ref-based, immediate) and setZoom in App.tsx (React state-based) — both must use the same formula
 ---
+
+## [2026-04-15 22:30] - US-004
+- Created layerUtils.ts with 4 pure utility functions: bringToFront, sendToBack, bringForward, sendBackward
+- Each function takes a sorted SceneElement array and an element ID, mutates the element's index property, re-sorts the array, and returns it
+- bringToFront: sets target index to max+1, Send to Back: sets to min-1
+- Bring Forward/Send Backward: swap indices with adjacent element in sorted array
+- Integrated into CanvasComponent.tsx: added 4 methods to useImperativeHandle
+- Each method: checks single selection, gets elements, calls utility, pushes history, scene.replaceAll, triggers redraw
+- Typecheck passes
+- **Learnings for future iterations:**
+  - Layer ordering is controlled by the `index` property on SceneElement; getElements() sorts by `a.index - b.index`
+  - scene.replaceAll() is used after index mutation to update the internal map with modified elements
+  - History.push() must be called BEFORE the mutation to capture the pre-change state for undo
+  - All layer operations are no-ops when selectedIds.length !== 1
+---
