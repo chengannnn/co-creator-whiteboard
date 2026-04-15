@@ -1298,6 +1298,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       moveElementsRef.current = newElements;
       onMoveElements(newElements);
+      renderStaticScene();
+      renderInteractive();
       return;
     }
 
@@ -1315,6 +1317,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const newElements = currentElements.map((e) => (e.id === primaryId ? resized : e));
       moveElementsRef.current = newElements;
       onMoveElements(newElements);
+      renderStaticScene();
+      renderInteractive();
       return;
     }
 
