@@ -61,3 +61,24 @@ Started: Tue Apr 15 2026
 - **Files changed:** `prd.json`
 - Typecheck passes
 ---
+
+## [2026-04-15 11:00] - US-002 (supplemental)
+- Implemented all four arrowhead types in drawShape: 'arrow', 'bar', 'dot', 'inverted_triangle'
+- Extracted drawArrowhead helper function for reusable arrowhead rendering
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — added Arrowhead import, refactored arrow case with switch for all types
+- Typecheck passes, 57 tests pass, lint 0 errors
+---
+
+## [2026-04-15 11:00] - US-005
+- Fixed unstable resize behavior on selected shapes
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — changed minimum resize constraint from 10px to 1px
+- **Verification:**
+  - Resize handles: 8 handles (nw, ne, sw, se, n, s, e, w) positioned via getBBox + getHandlePositions
+  - Corner handles: correctly update x, y, width, height based on mouse delta
+  - Edge handles: correctly adjust single dimension
+  - Shape width and height now constrained to minimum 1 pixel (was 10px, preventing small resizes)
+  - Released mouse commits resized shape via onMoveElements + pointerUp handler
+- Typecheck passes, 57 tests pass
+---
