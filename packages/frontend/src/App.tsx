@@ -607,6 +607,7 @@ function shapeToElement(shape: {
     fillColor: string;
   };
   ownerId?: string;
+  groupIds?: string[];
 }): SceneElement {
   const style = shape.style ?? DEFAULT_STYLE;
   const now = Date.now();
@@ -623,7 +624,7 @@ function shapeToElement(shape: {
     version: 1,
     versionNonce: Math.floor(Math.random() * 1e9),
     isDeleted: false,
-    groupIds: [],
+    groupIds: shape.groupIds ?? [],
     index: 0,
     updated: now,
     ownerId: shape.ownerId ?? '',

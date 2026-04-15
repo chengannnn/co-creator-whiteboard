@@ -48,3 +48,16 @@ Started: Tue Apr 15 2026
   - The renderInteractive function is called via explicit renderInteractive() from pointer handlers (not via React state), so ref-based marquee tracking works without re-rendering
   - Minimum marquee threshold of 3px prevents accidental clicks from triggering selection
 ---
+
+## [2026-04-15 19:15] - US-004
+- Verified SceneElement interface already has `groupIds: string[]` property in BaseElement (element.ts:39)
+- Verified createBaseElement already initializes `groupIds: []` (helpers.ts:44)
+- Verified image element creation in App.tsx already includes `groupIds: []` (lines 386, 469)
+- Fixed shapeToElement function to preserve `groupIds` from incoming WebSocket shapes instead of always defaulting to `[]`. Added `groupIds?: string[]` to the shape parameter type (App.tsx:610) and changed commonBase to use `shape.groupIds ?? []` (App.tsx:626)
+- Backend's Shape interface uses `[key: string]: unknown` so groupIds passes through automatically in shape_create/shape_update broadcasts
+- Typecheck passes
+- **Learnings for future iterations:**
+  - The `shapeToElement` function is the ONLY place where groupIds could be lost during WebSocket sync — always check it when adding new element fields
+  - Backend stores shapes as generic `Shape` with index signature, so any field added to SceneElement will pass through without backend changes
+  - There are 4 places where elements are created: createBaseElement (tools), shapeToElement (WS sync), and two inline image element creations in App.tsx — all must be kept in sync for new fields
+---
