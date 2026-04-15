@@ -8,6 +8,7 @@ import { HistoryManager } from './core/HistoryManager';
 import type { SceneElement, StrokeWidth, StrokeStyle, FillStyle, ToolType } from './types/element';
 import { DEFAULT_STYLE } from './types/element';
 import { ThemeMode } from './theme';
+import { zoomFromCenter } from './core/transform';
 
 interface RemoteCursor {
   userId: string;
@@ -536,16 +537,19 @@ function WhiteboardRoom() {
 
   // Unified zoom control
   const setZoom = useCallback((newZoom: number) => {
-    setScale((prev) => {
-      const clamped = Math.min(5, Math.max(0.1, newZoom));
-      const scaleRatio = clamped / prev;
-      const cx = window.innerWidth / 2;
-      const cy = window.innerHeight / 2;
-      setPanX((px) => cx - (cx - px) * scaleRatio);
-      setPanY((py) => cy - (cy - py) * scaleRatio);
+    const clamped = Math.min(5, Math.max(0.1, newZoom));
+    setScale((prevScale) => {
+      const newTransform = zoomFromCenter(
+        { scrollX: panX, scrollY: panY, zoom: prevScale },
+        window.innerWidth,
+        window.innerHeight,
+        clamped,
+      );
+      setPanX(newTransform.scrollX);
+      setPanY(newTransform.scrollY);
       return clamped;
     });
-  }, []);
+  }, [panX, panY]);
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>

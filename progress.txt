@@ -3,6 +3,9 @@ Started: Tue Apr 15 2026
 ---
 
 ## Codebase Patterns
+- core/transform.ts is the canonical place for view/zoom utilities — contains zoomFromCenter, screenToWorld, worldToScreen, applyTransform
+- Zoom operations must update zoom, scrollX, and scrollY together to keep viewport center anchored — use zoomFromCenter from transform.ts
+- CanvasComponent uses ref-based state (scaleRef, panXRef) for immediate zoom updates in wheel handler; App.tsx uses React state (scale, panX, panY) — both must use same formula
 - `useImperativeHandle` is defined before `renderStaticScene`/`renderInteractive` useCallbacks — must use refs to access them from exposed methods
 - renderInteractive uses `scaleRef.current` and `panXRef.current` for transform values to avoid stale closures in event handlers
 - Eraser ring rendering: draw in screen coordinates (ctx.setTransform reset) inside renderInteractive to keep fixed size regardless of zoom level
@@ -208,4 +211,17 @@ Started: Tue Apr 15 2026
   - UnifiedToolbar Row 2 structure: Colors | Width | Style | Layer | Save | Clear | Theme
   - Button disabled logic uses computed IIFE to derive state from selectedElements and allElements props
   - Layer operations require both single selection AND non-grouped element (same constraints as US-004)
+---
+
+## [2026-04-15 23:45] - US-002
+- Extracted shared zoomFromCenter function in core/transform.ts
+- transform.ts: Added zoomFromCenter(targetZoom) that computes viewport-center-based zoom transform. Returns { scrollX, scrollY, zoom } together for atomic update.
+- CanvasComponent.tsx: Updated wheel handler (handleWheel) to use zoomFromCenter instead of inline formula. Passes current pan/scale refs, receives new transform values.
+- App.tsx: Updated setZoom to use zoomFromCenter. + and - buttons in BottomPanel already route through onZoom → setZoom.
+- Added zoomFromCenter import to CanvasComponent.tsx and App.tsx
+- Typecheck passes
+- **Learnings for future iterations:**
+  - core/transform.ts is the canonical place for view/zoom utilities — already has screenToWorld, worldToScreen, applyTransform
+  - React state setters (setPanX, setPanY, setScale) require functional updates when the zoom formula needs current values from multiple state variables
+  - The zoomFromCenter formula is algebraically equivalent to the scaleRatio approach but more explicit about world coordinate anchoring
 ---

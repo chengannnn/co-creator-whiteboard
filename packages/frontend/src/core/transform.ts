@@ -35,6 +35,31 @@ export function worldToScreen(
 }
 
 /**
+ * Zoom from the center of the viewport, keeping the center point
+ * anchored to the same world coordinates.
+ *
+ * Formula:
+ *   worldX = (containerWidth / 2 - scrollX) / zoom
+ *   worldY = (containerHeight / 2 - scrollY) / zoom
+ *   newScrollX = containerWidth / 2 - worldX * targetZoom
+ *   newScrollY = containerHeight / 2 - worldY * targetZoom
+ */
+export function zoomFromCenter(
+  transform: ViewTransform,
+  containerWidth: number,
+  containerHeight: number,
+  targetZoom: number,
+): { scrollX: number; scrollY: number; zoom: number } {
+  const cx = containerWidth / 2;
+  const cy = containerHeight / 2;
+  const worldX = (cx - transform.scrollX) / transform.zoom;
+  const worldY = (cy - transform.scrollY) / transform.zoom;
+  const newScrollX = cx - worldX * targetZoom;
+  const newScrollY = cy - worldY * targetZoom;
+  return { scrollX: newScrollX, scrollY: newScrollY, zoom: targetZoom };
+}
+
+/**
  * Apply the view transform to a canvas 2D context.
  * Uses ctx.setTransform(zoom, 0, 0, zoom, scrollX, scrollY).
  */

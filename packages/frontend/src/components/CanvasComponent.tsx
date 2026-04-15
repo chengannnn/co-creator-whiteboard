@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHand
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
 import { findElementsInRect } from '../core/hitTesting';
+import { zoomFromCenter } from '../core/transform';
 import { bringToFront, sendToBack, bringForward, sendBackward } from '../core/layerUtils';
 import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement, Arrowhead } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
@@ -1149,17 +1150,17 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const delta = -e.deltaY * ZOOM_FACTOR;
       const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentScale + delta));
 
-      // Viewport-center-based zoom: keep viewport center anchored to same world coordinates
-      const viewportCenterX = canvas.width / 2;
-      const viewportCenterY = canvas.height / 2;
-      const worldX = (viewportCenterX - currentPanX) / currentScale;
-      const worldY = (viewportCenterY - currentPanY) / currentScale;
-      const newPanX = viewportCenterX - worldX * newScale;
-      const newPanY = viewportCenterY - worldY * newScale;
+      // Viewport-center-based zoom using shared utility
+      const newTransform = zoomFromCenter(
+        { scrollX: currentPanX, scrollY: currentPanY, zoom: currentScale },
+        canvas.width,
+        canvas.height,
+        newScale,
+      );
 
-      scaleRef.current = newScale;
-      panXRef.current = newPanX;
-      panYRef.current = newPanY;
+      scaleRef.current = newTransform.zoom;
+      panXRef.current = newTransform.scrollX;
+      panYRef.current = newTransform.scrollY;
 
       // Redraw all layers with ref-based transform
       const ctx = canvas.getContext('2d');
