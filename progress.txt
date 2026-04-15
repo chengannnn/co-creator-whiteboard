@@ -9,6 +9,8 @@ Started: Tue Apr 15 2026
 - Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
 - Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
 - Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
 
 ## [2026-04-15 17:44] - US-001
 - Verified US-001 implementation: reverse drag coordinate normalization already in place
@@ -30,4 +32,19 @@ Started: Tue Apr 15 2026
 - **Learnings for future iterations:**
   - There are two copies of resize logic: CanvasComponent.tsx (primary, used by React pointer events) and SelectToolHandler.ts (standalone handler). Both must be kept in sync.
   - The old delta-based approach (`width += dx`) caused drift because deltas were computed from original bounds but applied to already-modified bounds.
+---
+
+## [2026-04-15 18:45] - US-003
+- Implemented marquee selection for batch-selecting shapes
+- hitTesting.ts: Added `rectsIntersect` (AABB intersection) and `findElementsInRect` (find all elements intersecting a rectangle) utilities
+- CanvasComponent.tsx: Added `marqueeStart` and `marqueeEnd` refs for tracking drag rectangle
+- onPointerDown: When select tool clicks on empty canvas, stores marquee start point and enters 'selecting' mode
+- onPointerMove: In 'selecting' mode, updates marquee end point and triggers renderInteractive to draw the rectangle
+- onPointerUp: Computes normalized marquee bbox, intersects with all scene elements via findElementsInRect, updates selection
+- renderInteractive: Draws semi-transparent blue rectangle (fill rgba(0,120,255,0.1) + blue dashed border)
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - CanvasComponent has its own duplicated getElementBounds/getBBox/hitTestElements instead of using hitTesting.ts exports — the new findElementsInRect was imported but the local versions remain
+  - The renderInteractive function is called via explicit renderInteractive() from pointer handlers (not via React state), so ref-based marquee tracking works without re-rendering
+  - Minimum marquee threshold of 3px prevents accidental clicks from triggering selection
 ---
