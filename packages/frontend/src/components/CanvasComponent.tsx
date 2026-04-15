@@ -1441,6 +1441,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     // Eraser tool
     if (activeTool === 'eraser') {
+      e.preventDefault();
       isDrawing.current = true;
       eraserHandlerRef.current = createEraserHandler(() => scene.getElements());
       eraserHandlerRef.current.onPointerDown(world.x, world.y, setDraft);
@@ -1921,6 +1922,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         <canvas
           ref={interactiveCanvasRef}
           id="canvas-interactive"
+          className={activeTool === 'eraser' ? 'eraser-cursor' : undefined}
           style={{
             position: 'absolute',
             top: 0,
