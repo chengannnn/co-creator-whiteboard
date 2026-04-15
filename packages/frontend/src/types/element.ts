@@ -32,7 +32,6 @@ export interface BaseElement {
   strokeStyle: StrokeStyle;
   fillStyle: FillStyle;
   fillColor: string;
-  roughness: number;
   opacity: number;
   version: number;
   versionNonce: number;
@@ -41,7 +40,6 @@ export interface BaseElement {
   index: number;
   updated: number;
   ownerId: string;
-  seed: number;
 }
 
 export interface RectangleElement extends BaseElement {

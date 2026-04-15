@@ -379,7 +379,6 @@ function WhiteboardRoom() {
                   strokeStyle: defaultStyle.strokeStyle,
                   fillStyle: defaultStyle.fillStyle,
                   fillColor: defaultStyle.fillColor,
-                  roughness: 1,
                   opacity: 1,
                   version: 1,
                   versionNonce: Math.floor(Math.random() * 1e9),
@@ -388,7 +387,6 @@ function WhiteboardRoom() {
                   index: 0,
                   updated: now,
                   ownerId: userId ?? '',
-                  seed: Math.floor(Math.random() * 1e9),
                   src: evt.target!.result as string,
                   fileId: null,
                 };
@@ -464,7 +462,6 @@ function WhiteboardRoom() {
         strokeStyle: defaultStyle.strokeStyle,
         fillStyle: defaultStyle.fillStyle,
         fillColor: defaultStyle.fillColor,
-        roughness: 1,
         opacity: 1,
         version: 1,
         versionNonce: Math.floor(Math.random() * 1e9),
@@ -473,7 +470,6 @@ function WhiteboardRoom() {
         index: 0,
         updated: now,
         ownerId: userId ?? '',
-        seed: Math.floor(Math.random() * 1e9),
         src: dataUrl,
         fileId: null,
       };
@@ -623,7 +619,6 @@ function shapeToElement(shape: {
     strokeStyle: style.strokeStyle as StrokeStyle,
     fillStyle: style.fillStyle as FillStyle,
     fillColor: style.fillColor,
-    roughness: 1,
     opacity: 1,
     version: 1,
     versionNonce: Math.floor(Math.random() * 1e9),
@@ -632,7 +627,6 @@ function shapeToElement(shape: {
     index: 0,
     updated: now,
     ownerId: shape.ownerId ?? '',
-    seed: Math.floor(Math.random() * 1e9),
   };
 
   switch (shape.type) {

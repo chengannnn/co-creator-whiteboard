@@ -16,7 +16,6 @@ function makeRect(id: string, x: number, y: number, w: number, h: number, index 
     strokeStyle: 'solid',
     fillStyle: 'none',
     fillColor: 'transparent',
-    roughness: 1,
     opacity: 100,
     version: 1,
     versionNonce: 123,
@@ -25,7 +24,6 @@ function makeRect(id: string, x: number, y: number, w: number, h: number, index 
     index,
     updated: Date.now(),
     ownerId: 'owner-1',
-    seed: 999,
   };
 }
 
@@ -43,7 +41,6 @@ function makeLine(id: string, x: number, y: number, points: { x: number; y: numb
     strokeStyle: 'solid',
     fillStyle: 'none',
     fillColor: 'transparent',
-    roughness: 1,
     opacity: 100,
     version: 1,
     versionNonce: 456,
@@ -52,7 +49,6 @@ function makeLine(id: string, x: number, y: number, points: { x: number; y: numb
     index,
     updated: Date.now(),
     ownerId: 'owner-1',
-    seed: 888,
     points,
     startArrowhead: null,
     endArrowhead: null,

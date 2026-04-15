@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import { RoughCanvas } from 'roughjs/bin/canvas.js';
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
 import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement } from '../types/element';
@@ -106,7 +105,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement>(null);
-  const roughCanvasRef = useRef<RoughCanvas | null>(null);
   const isDrawing = useRef(false);
 
   // Interaction state
@@ -290,8 +288,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const ctx = offscreen.getContext('2d');
       if (!ctx) return;
 
-      const rc = new RoughCanvas(offscreen);
-
       // Background matching current theme
       ctx.fillStyle = theme.canvasBg;
       ctx.fillRect(0, 0, exportWidth, exportHeight);
@@ -301,7 +297,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       // Render all elements
       for (const el of elements) {
-        drawShape(rc, el, themeMode);
+        drawShape(ctx, el, themeMode);
       }
 
       // Draw colored borders on remote elements
@@ -338,52 +334,83 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [scene, userId, shapeOwners, themeMode, undo, redo]);
 
-  // --- drawShape: render a SceneElement using roughjs ---
+  // --- drawShape: render a SceneElement using native Canvas 2D ---
 
   const drawShape = (
-    rc: RoughCanvas,
+    ctx: CanvasRenderingContext2D,
     element: SceneElement,
     themeMode: ThemeMode,
   ) => {
     const strokeColor = getStrokeColor(element.strokeColor, themeMode);
-    const opts: {
-      stroke: string;
-      strokeWidth: StrokeWidth;
-      strokeLineDash?: number[];
-      fill?: string;
-      fillStyle?: 'cross-hatch' | 'solid';
-      hachureAngle: number;
-      hachureGap: number;
-      roughness: number;
-    } = {
-      stroke: strokeColor,
-      strokeWidth: element.strokeWidth,
-      strokeLineDash: element.strokeStyle === 'dashed' ? [8, 6] : undefined,
-      fill: element.fillStyle === 'none' ? undefined : element.fillColor,
-      fillStyle: element.fillStyle === 'hatch' ? 'cross-hatch' : element.fillStyle === 'solid' ? 'solid' : undefined,
-      hachureAngle: 60,
-      hachureGap: element.strokeWidth * 4,
-      roughness: element.roughness,
-    };
+
+    ctx.save();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = element.strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (element.strokeStyle === 'dashed') {
+      ctx.setLineDash([8, 6]);
+    }
+    ctx.globalAlpha = element.opacity;
 
     switch (element.type) {
       case 'rectangle': {
-        /* eslint-disable @typescript-eslint/no-explicit-any -- rough.js supports borderRadius as an undocumented option */
-        const rectOpts = { ...opts, borderRadius: (element as RectangleElement).borderRadius ?? 0 };
-        rc.rectangle(element.x, element.y, element.width, element.height, rectOpts as any);
-        /* eslint-enable @typescript-eslint/no-explicit-any */
+        if (element.fillStyle !== 'none') {
+          ctx.fillStyle = element.fillColor;
+          if ((element as RectangleElement).borderRadius) {
+            const r = (element as RectangleElement).borderRadius!;
+            ctx.beginPath();
+            ctx.moveTo(element.x + r, element.y);
+            ctx.lineTo(element.x + element.width - r, element.y);
+            ctx.quadraticCurveTo(element.x + element.width, element.y, element.x + element.width, element.y + r);
+            ctx.lineTo(element.x + element.width, element.y + element.height - r);
+            ctx.quadraticCurveTo(element.x + element.width, element.y + element.height, element.x + element.width - r, element.y + element.height);
+            ctx.lineTo(element.x + r, element.y + element.height);
+            ctx.quadraticCurveTo(element.x, element.y + element.height, element.x, element.y + element.height - r);
+            ctx.lineTo(element.x, element.y + r);
+            ctx.quadraticCurveTo(element.x, element.y, element.x + r, element.y);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillRect(element.x, element.y, element.width, element.height);
+          }
+        }
+        ctx.beginPath();
+        ctx.setLineDash(element.strokeStyle === 'dashed' ? [8, 6] : []);
+        if ((element as RectangleElement).borderRadius) {
+          const r = (element as RectangleElement).borderRadius!;
+          ctx.moveTo(element.x + r, element.y);
+          ctx.lineTo(element.x + element.width - r, element.y);
+          ctx.quadraticCurveTo(element.x + element.width, element.y, element.x + element.width, element.y + r);
+          ctx.lineTo(element.x + element.width, element.y + element.height - r);
+          ctx.quadraticCurveTo(element.x + element.width, element.y + element.height, element.x + element.width - r, element.y + element.height);
+          ctx.lineTo(element.x + r, element.y + element.height);
+          ctx.quadraticCurveTo(element.x, element.y + element.height, element.x, element.y + element.height - r);
+          ctx.lineTo(element.x, element.y + r);
+          ctx.quadraticCurveTo(element.x, element.y, element.x + r, element.y);
+          ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.strokeRect(element.x, element.y, element.width, element.height);
+        }
         break;
       }
 
-      case 'ellipse':
-        rc.ellipse(
-          element.x + element.width / 2,
-          element.y + element.height / 2,
-          Math.abs(element.width),
-          Math.abs(element.height),
-          opts,
-        );
+      case 'ellipse': {
+        const cx = element.x + element.width / 2;
+        const cy = element.y + element.height / 2;
+        const rx = Math.abs(element.width) / 2;
+        const ry = Math.abs(element.height) / 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        if (element.fillStyle !== 'none') {
+          ctx.fillStyle = element.fillColor;
+          ctx.fill();
+        }
+        ctx.setLineDash(element.strokeStyle === 'dashed' ? [8, 6] : []);
+        ctx.stroke();
         break;
+      }
 
       case 'rhombus': {
         const cx = element.x + element.width / 2;
@@ -391,65 +418,68 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const hw = Math.abs(element.width) / 2;
         const hh = Math.abs(element.height) / 2;
         const rhombusBorderRadius = (element as RhombusElement).borderRadius ?? 0;
+        ctx.beginPath();
         if (rhombusBorderRadius > 0) {
-          // Draw a rounded rectangle rotated by 45 degrees to create a rounded rhombus
-          const side = Math.min(hw, hh) * Math.sqrt(2);
-          /* eslint-disable @typescript-eslint/no-explicit-any -- rough.js supports borderRadius and rotation as undocumented options */
-          rc.rectangle(cx - side, cy - side, side * 2, side * 2, {
-            ...opts,
-            borderRadius: rhombusBorderRadius,
-            rotation: Math.PI / 4,
-            roughness: opts.roughness,
-          } as any);
-          /* eslint-enable @typescript-eslint/no-explicit-any */
+          // 4-point diamond (rounded corners approximated)
+          ctx.moveTo(cx, cy - hh);
+          ctx.lineTo(cx + hw, cy);
+          ctx.lineTo(cx, cy + hh);
+          ctx.lineTo(cx - hw, cy);
+          ctx.closePath();
         } else {
-          rc.polygon(
-            [
-              [cx, cy - hh],
-              [cx + hw, cy],
-              [cx, cy + hh],
-              [cx - hw, cy],
-            ],
-            opts,
-          );
+          ctx.moveTo(cx, cy - hh);
+          ctx.lineTo(cx + hw, cy);
+          ctx.lineTo(cx, cy + hh);
+          ctx.lineTo(cx - hw, cy);
+          ctx.closePath();
         }
+        if (element.fillStyle !== 'none') {
+          ctx.fillStyle = element.fillColor;
+          ctx.fill();
+        }
+        ctx.setLineDash(element.strokeStyle === 'dashed' ? [8, 6] : []);
+        ctx.stroke();
         break;
       }
 
       case 'freehand': {
         if (element.points.length < 2) break;
-        rc.linearPath(element.points.map((p) => [p.x + element.x, p.y + element.y]), {
-          stroke: opts.stroke,
-          strokeWidth: opts.strokeWidth,
-          strokeLineDash: opts.strokeLineDash,
-          roughness: 0.5,
-        });
+        ctx.beginPath();
+        ctx.setLineDash([]);
+        const pts = element.points;
+        ctx.moveTo(pts[0].x + element.x, pts[0].y + element.y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x + element.x, pts[i].y + element.y);
+        }
+        ctx.stroke();
         break;
       }
 
       case 'line': {
         if (element.points.length < 2) break;
-        rc.linearPath(element.points.map((p) => [p.x + element.x, p.y + element.y]), {
-          stroke: opts.stroke,
-          strokeWidth: opts.strokeWidth,
-          strokeLineDash: opts.strokeLineDash,
-          roughness: opts.roughness,
-        });
+        ctx.beginPath();
+        ctx.setLineDash(element.strokeStyle === 'dashed' ? [8, 6] : []);
+        const pts = element.points;
+        ctx.moveTo(pts[0].x + element.x, pts[0].y + element.y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x + element.x, pts[i].y + element.y);
+        }
+        ctx.stroke();
         break;
       }
 
       case 'arrow': {
         if (element.points.length < 2) break;
-        rc.linearPath(element.points.map((p) => [p.x + element.x, p.y + element.y]), {
-          stroke: opts.stroke,
-          strokeWidth: opts.strokeWidth,
-          strokeLineDash: opts.strokeLineDash,
-          roughness: opts.roughness,
-        });
-        // Draw arrowhead(s) using raw canvas 2D
-        const ctx = staticCanvasRef.current?.getContext('2d');
-        if (!ctx) break;
+        ctx.beginPath();
+        ctx.setLineDash(element.strokeStyle === 'dashed' ? [8, 6] : []);
         const pts = element.points;
+        ctx.moveTo(pts[0].x + element.x, pts[0].y + element.y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x + element.x, pts[i].y + element.y);
+        }
+        ctx.stroke();
+
+        // Draw arrowhead(s)
         // End arrowhead
         if (element.endArrowhead === 'arrow') {
           const last = pts[pts.length - 1];
@@ -457,6 +487,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
           const headSize = element.strokeWidth * 3;
           ctx.save();
+          ctx.setLineDash([]);
           ctx.fillStyle = strokeColor;
           ctx.translate(last.x + element.x, last.y + element.y);
           ctx.rotate(angle);
@@ -475,6 +506,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           const angle = Math.atan2(first.y - next.y, first.x - next.x);
           const headSize = element.strokeWidth * 3;
           ctx.save();
+          ctx.setLineDash([]);
           ctx.fillStyle = strokeColor;
           ctx.translate(first.x + element.x, first.y + element.y);
           ctx.rotate(angle);
@@ -491,8 +523,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       case 'text': {
         if (!element.content) break;
-        const ctx = staticCanvasRef.current?.getContext('2d');
-        if (!ctx) break;
+        ctx.restore(); // restore transform state before text rendering
         ctx.save();
         ctx.font = `${element.fontSize}px ${element.fontFamily}`;
         ctx.fillStyle = strokeColor;
@@ -518,13 +549,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           element.height = Math.ceil(totalHeight);
         }
         ctx.restore();
-        break;
+        return; // already restored
       }
 
       case 'image': {
         if (!element.src) break;
-        const ctx = staticCanvasRef.current?.getContext('2d');
-        if (!ctx) break;
+        ctx.restore(); // restore transform state before image rendering
+        ctx.save();
         let img = imageCacheRef.current.get(element.src);
         if (!img) {
           img = new Image();
@@ -532,14 +563,15 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           imageCacheRef.current.set(element.src, img);
         }
         if (img.complete && img.naturalWidth > 0) {
-          ctx.save();
           ctx.globalAlpha = element.opacity;
           ctx.drawImage(img, element.x, element.y, element.width, element.height);
-          ctx.restore();
         }
-        break;
+        ctx.restore();
+        return; // already restored
       }
     }
+
+    ctx.restore();
   };
 
   // --- Three-layer canvas rendering ---
@@ -554,13 +586,12 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, [theme]);
 
-  // Layer 1: Static — renders committed elements using roughjs
+  // Layer 1: Static — renders committed elements using native Canvas 2D
   const renderStaticScene = useCallback(() => {
     const canvas = staticCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const rc = roughCanvasRef.current;
-    if (!ctx || !rc) return;
+    if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -568,7 +599,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     const elements = scene.getElements();
     for (const el of elements) {
-      drawShape(rc, el, themeMode);
+      drawShape(ctx, el, themeMode);
     }
 
     // Draw colored borders on remote elements (attribution)
@@ -603,11 +634,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     // Draw draft element if drawing
     if (interactionMode === 'drawing' && draftRef.current) {
-      const rc = roughCanvasRef.current;
-      if (rc) {
-        const draftEl = draftRef.current.element;
-        drawShape(rc, draftEl, themeMode);
-      }
+      const draftEl = draftRef.current.element;
+      drawShape(ctx, draftEl, themeMode);
     }
 
     // Eraser: draw red dashed highlight borders around hit elements
@@ -738,7 +766,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       staticCanvas.height = h;
       interactiveCanvas.width = w;
       interactiveCanvas.height = h;
-      roughCanvasRef.current = new RoughCanvas(staticCanvas);
       redrawAll();
     };
 
@@ -872,8 +899,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       panYRef.current = newPanY;
 
       // Redraw all layers with ref-based transform
-      const roughCanvas = roughCanvasRef.current;
-      if (!roughCanvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -887,7 +912,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           applyCanvasTransformFromRefs(staticCtx);
           const elements = scene.getElements();
           for (const el of elements) {
-            drawShape(roughCanvas, el, themeMode);
+            drawShape(staticCtx, el, themeMode);
           }
           staticCtx.restore();
         }
@@ -1274,8 +1299,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         const bgCtx = bgCanvas.getContext('2d');
         const staticCtx = staticCanvas.getContext('2d');
         const interactiveCtx = interactiveCanvas.getContext('2d');
-        const rc = roughCanvasRef.current;
-        if (!bgCtx || !staticCtx || !interactiveCtx || !rc) return;
+        if (!bgCtx || !staticCtx || !interactiveCtx) return;
 
         bgCtx.fillStyle = theme.canvasBg;
         bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
@@ -1285,7 +1309,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         applyCanvasTransformFromRefs(staticCtx);
         const elements = scene.getElements();
         for (const el of elements) {
-          drawShape(rc, el, themeMode);
+          drawShape(staticCtx, el, themeMode);
         }
         for (const el of elements) {
           const ownerId = shapeOwners.get(el.id);
@@ -1458,7 +1482,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         strokeStyle: defaultStyle.strokeStyle,
         fillStyle: defaultStyle.fillStyle,
         fillColor: defaultStyle.fillColor,
-        roughness: 1,
         opacity: 1,
         version: 1,
         versionNonce: Math.floor(Math.random() * 1e9),
@@ -1467,7 +1490,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         index: 0,
         updated: Date.now(),
         ownerId: userId ?? '',
-        seed: Math.floor(Math.random() * 1e9),
         content: '',
         fontSize: 20,
         fontFamily: 'sans-serif',
@@ -1517,7 +1539,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           id="canvas-bg"
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         />
-        {/* Layer 1: Static (roughjs committed elements) */}
+        {/* Layer 1: Static (native Canvas 2D committed elements) */}
         <canvas
           ref={staticCanvasRef}
           id="canvas-static"

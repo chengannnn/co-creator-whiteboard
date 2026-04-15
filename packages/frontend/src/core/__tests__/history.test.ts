@@ -8,9 +8,9 @@ function makeRect(id: string, x: number, y: number, w: number, h: number): Recta
     id, type: 'rectangle', x, y, width: w, height: h,
     angle: 0, strokeColor: '#000', strokeWidth: 1,
     strokeStyle: 'solid', fillStyle: 'none', fillColor: 'transparent',
-    roughness: 1, opacity: 100, version: 1, versionNonce: 123,
+    opacity: 100, version: 1, versionNonce: 123,
     isDeleted: false, groupIds: [], index: 0,
-    updated: Date.now(), ownerId: 'owner-1', seed: 999,
+    updated: Date.now(), ownerId: 'owner-1',
   };
 }
 

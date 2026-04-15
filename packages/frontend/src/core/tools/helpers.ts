@@ -37,7 +37,6 @@ export function createBaseElement(
     strokeStyle: style.strokeStyle,
     fillStyle: style.fillStyle,
     fillColor: style.fillColor,
-    roughness: 1,
     opacity: 1,
     version: 1,
     versionNonce: Math.floor(Math.random() * 1e9),
@@ -46,7 +45,6 @@ export function createBaseElement(
     index: 0,
     updated: Date.now(),
     ownerId: '',
-    seed: Math.floor(Math.random() * 1e9),
   };
 }
 
