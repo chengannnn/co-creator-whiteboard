@@ -1,18 +1,19 @@
 {
-  "project": "Whiteboard v2.1.2",
-  "branchName": "feature/whiteboard-v2.1-refactor",
-  "description": "渲染层降级与核心交互修复：移除 Rough.js 依赖，统一使用原生 Canvas 2D 渲染，修复交互层拖尾残影、向左/向上拖拽绘制失效、选中图形拉伸不稳定等致命缺陷。",
+  "project": "Whiteboard v2.1.3",
+  "branchName": "feature/whiteboard-v2.1.3",
+  "description": "交互精准度提升与高级选择系统：彻底修复反向拖拽绘制和缩放锚点偏移的致命 Bug，引入鼠标框选（Marquee Selection）与对象组合（Grouping）功能。",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Remove Rough.js dependency and roughness-related data properties",
-      "description": "As a developer, I want to remove the Rough.js library and all roughness-related properties so that the project has fewer dependencies and a smaller bundle size.",
+      "title": "Fix reverse drag drawing failure with coordinate normalization",
+      "description": "As a user, I want to draw shapes by dragging in any direction (including left/up), so that shapes never disappear or distort when I drag backwards.",
       "acceptanceCriteria": [
-        "Remove `roughjs` from package.json dependencies and node_modules",
-        "Remove `roughness` and `seed` properties from SceneElement interface and all related type definitions",
-        "Remove all `roughjs` import statements from the codebase",
-        "Clean up all code paths that referenced roughness/seed properties",
-        "Typecheck passes"
+        "For closed shapes (Rectangle, Rhombus): pointermove and pointerup both execute coordinate normalization: x = Math.min(startX, currentX), y = Math.min(startY, currentY), width = Math.abs(currentX - startX), height = Math.abs(currentY - startY)",
+        "For vector shapes (Line, Arrow, Freehand): DO NOT apply strict top-left normalization. Preserve original start and end direction points (e.g., x1, y1 to x2, y2) so arrows point correctly regardless of drag direction",
+        "Rectangle drawn from (500,500) to (200,200) leaves a perfect rectangle on canvas",
+        "SceneElement width and height for closed shapes are never negative numbers",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 1,
       "passes": true,
@@ -20,70 +21,93 @@
     },
     {
       "id": "US-002",
-      "title": "Rewrite drawElement function to use native Canvas 2D APIs",
-      "description": "As a developer, I want to rewrite the drawElement rendering function to use native Canvas 2D APIs so that all shapes render as clean, standard vector geometry.",
+      "title": "Fix resize handle offset with absolute coordinate calculation",
+      "description": "As a user, I want shape edges to follow my cursor precisely when resizing via handles, so that I can accurately adjust shape dimensions.",
       "acceptanceCriteria": [
-        "Rectangles rendered using ctx.strokeRect() and ctx.fillRect()",
-        "Rhombuses rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo() + ctx.closePath()",
-        "Lines rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo()",
-        "Arrows rendered with standard paths plus arrowhead triangle, no hand-drawn jitter",
-        "All shape types render correctly on both Static and Interactive Canvas layers",
-        "Shape style properties (strokeColor, fillColor, strokeWidth) still apply correctly",
-        "Typecheck passes"
+        "Resize uses absolute coordinate calculation method, no width += deltaX relative accumulation",
+        "Dragging se (bottom-right) handle: top-left corner (x, y) is completely locked, new width = mouseX - originX, new height = mouseY - originY",
+        "Dragging nw (top-left) handle: bottom-right corner is locked, x, y, width, height recalculated from opposite corner",
+        "All 8 handles (nw, ne, sw, se, n, s, e, w) correctly lock the opposite anchor and recalculate dimensions",
+        "Mouse screen coordinates correctly converted to world coordinates (accounting for panX, panY, zoom)",
+        "Minimum width and height constrained to 5px, preventing axis-crossing flip",
+        "Dragging a rectangle's bottom-right handle outward then inward, the top-left corner stays completely stationary",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Fix Interactive Canvas ghosting/trail artifacts during drawing",
-      "description": "As a user, I want the drawing canvas to not leave ghosting trails when I drag to create shapes, so that my workspace stays clean and responsive.",
+      "title": "Implement marquee selection for batch-selecting shapes",
+      "description": "As a user, I want to drag a selection rectangle on empty canvas to batch-select multiple shapes, so I can efficiently work with many elements at once.",
       "acceptanceCriteria": [
-        "Interactive Canvas cleared with ctx.clearRect(0, 0, canvas.width, canvas.height) before each draft redraw in pointermove handler",
-        "clearRect only affects Interactive Canvas, Static Canvas and its committed shapes are unaffected",
-        "Dragging to draw shows only one live draft shape, no overlapping ghost trails",
-        "After pointerup, draft disappears completely, only committed shape remains on Static Canvas",
+        "Marquee selection only active in Selection Tool mode",
+        "pointerdown on empty canvas (no shape hit) triggers marquee selection mode",
+        "pointermove draws semi-transparent blue rectangle on Interactive Canvas: fill rgba(0, 120, 255, 0.1) + blue dashed border",
+        "Marquee rectangle uses coordinate normalization (Math.min, Math.abs) to ensure positive width/height",
+        "pointerup calculates marquee bounding box and intersects with all non-deleted scene elements",
+        "Elements whose bounding box intersects or is fully contained within marquee rectangle are added to selectedElementIds",
+        "Interactive Canvas marquee rectangle cleared after pointerup",
+        "Static Canvas redraws to show selection highlight on newly selected elements",
+        "Three separate shapes on canvas, marquee covering part of two shapes selects both on release",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Fix left/up direction drag drawing failure",
-      "description": "As a user, I want to draw shapes by dragging the mouse in any direction (left, up, right, down), so that the drawing experience feels natural.",
+      "title": "Add groupIds array to SceneElement interface",
+      "description": "As a developer, I need to add a groupIds array to the SceneElement interface so that shapes can be grouped and ungrouped.",
       "acceptanceCriteria": [
-        "Dragging left from start point renders rectangle/rhombus correctly",
-        "Dragging up from start point renders rectangle/rhombus correctly",
-        "Dragging in all diagonal directions (top-left, bottom-left, top-right, bottom-right) renders correctly",
-        "Coordinate calculation uses Math.min(startX, currentX) for x/y and Math.abs(currentX - startX) for width/height",
-        "Committed shape position and dimensions on Static Canvas match actual mouse drag trajectory",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "SceneElement interface has new groupIds: string[] property (default empty array)",
+        "Existing element creation logic initializes groupIds: []",
+        "WebSocket sync and persistence correctly serialize/deserialize groupIds field",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Fix unstable resize behavior on selected shapes",
-      "description": "As a user, I want to reliably resize a selected shape by dragging its handles, so that I can precisely adjust shape dimensions.",
+      "title": "Implement group and ungroup core logic",
+      "description": "As a user, I want to group selected shapes together so that selecting one element selects the entire group, and I can move them as a unit.",
       "acceptanceCriteria": [
-        "Selected shape displays standard resize handles (nw, ne, sw, se, n, s, e, w) positioned on exact mathematical bounding box",
-        "Dragging corner handles (nw, ne, sw, se) correctly updates shape x, y, width, height based on mouse delta",
-        "Dragging edge midpoint handles (n, s, e, w) correctly adjusts dimension in corresponding direction",
-        "Shape bounding box tracks mouse cursor position during drag, no jumping or misalignment",
-        "Shape width and height constrained to minimum 1 pixel to prevent axis-crossing flip issues",
-        "Released mouse commits resized shape to Static Canvas",
+        "Group: generates unique groupId (crypto.randomUUID()), pushes it into groupIds array of all selected elements",
+        "Ungroup: when only one group is selected, removes the groupId from all elements in that group",
+        "Clicking any element within a group automatically finds and selects all elements with the same groupId",
+        "Group selection highlight uses max bounding box with single dashed border",
+        "Dragging a group moves all elements within it by the same delta, preserving relative positions",
+        "CRITICAL: Disable resize handles for Group selections in this version to prevent complex scaling distortion. Groups can only be moved, not resized.",
+        "Both Group and Ungroup actions MUST push a snapshot to the history stack for Undo/Redo",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add Group/Ungroup button to toolbar with state machine",
+      "description": "As a user, I want a Group button in the toolbar that intelligently enables/disables based on my selection, so I can group and ungroup shapes with a single click.",
+      "acceptanceCriteria": [
+        "New Group button added at rightmost position of toolbar first row (to the right of round corner button)",
+        "Button uses group SVG icon (merged square with dots at four corners)",
+        "Disabled state (grayed out) when selected element count < 2",
+        "Enabled state (normal) when selected element count >= 2 and elements are not in the same group, clicking groups them",
+        "Ungroup state when only one group object is selected, clicking ungroups it",
+        "Button state updates reactively when selectedElementIds changes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
       "notes": ""
     }
   ]
