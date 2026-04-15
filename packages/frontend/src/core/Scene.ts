@@ -78,6 +78,61 @@ export class Scene {
   }
 
   /**
+   * Groups selected elements by assigning a shared groupId.
+   * Returns the generated groupId, or null if fewer than 2 elements.
+   */
+  groupElements(elementIds: string[]): string | null {
+    if (elementIds.length < 2) return null;
+    const groupId = crypto.randomUUID();
+    for (const id of elementIds) {
+      const existing = this.elements.get(id);
+      if (!existing) continue;
+      this.elements.set(id, {
+        ...existing,
+        groupIds: [...existing.groupIds, groupId],
+        version: existing.version + 1,
+        updated: Date.now(),
+      } as SceneElement);
+    }
+    return groupId;
+  }
+
+  /**
+   * Ungroups elements that share the given groupId.
+   * Only removes the specified groupId from each element.
+   */
+  ungroupElements(elementIds: string[], groupId: string): void {
+    for (const id of elementIds) {
+      const existing = this.elements.get(id);
+      if (!existing) continue;
+      this.elements.set(id, {
+        ...existing,
+        groupIds: existing.groupIds.filter((g) => g !== groupId),
+        version: existing.version + 1,
+        updated: Date.now(),
+      } as SceneElement);
+    }
+  }
+
+  /**
+   * Returns all element IDs that share any groupId with the given element.
+   * Returns an empty array if the element has no groupIds.
+   */
+  getGroupElementIds(elementId: string): string[] {
+    const el = this.elements.get(elementId);
+    if (!el || el.groupIds.length === 0) return [];
+    const groupIds = new Set(el.groupIds);
+    const result: string[] = [];
+    for (const [id, candidate] of this.elements) {
+      if (candidate.isDeleted) continue;
+      if (candidate.groupIds.some((g) => groupIds.has(g))) {
+        result.push(id);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Computes the minimum bounding box of all non-deleted elements.
    * Returns null if there are no non-deleted elements.
    */

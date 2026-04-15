@@ -42,6 +42,8 @@ export interface CanvasComponentRef {
   exportPng: () => void;
   undo: () => void;
   redo: () => void;
+  groupSelectedElements: () => void;
+  ungroupSelectedElements: () => void;
 }
 
 interface CanvasComponentProps {
@@ -157,6 +159,11 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const marqueeStart = useRef<Point | null>(null);
   const marqueeEnd = useRef<Point | null>(null);
 
+  // Refs for render callbacks (used in useImperativeHandle before render functions are defined)
+  const redrawAllRef = useRef<(() => void) | null>(null);
+  const renderStaticSceneRef = useRef<(() => void) | null>(null);
+  const renderInteractiveRef = useRef<(() => void) | null>(null);
+
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   useEffect(() => { panXRef.current = panX; }, [panX]);
@@ -266,6 +273,49 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     };
   }, []);
 
+  /**
+   * Computes the union bounding box of all elements sharing a groupId.
+   */
+  const getGroupBBox = useCallback((groupId: string) => {
+    const elements = scene.getElements();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let found = false;
+    for (const el of elements) {
+      if (el.groupIds.includes(groupId)) {
+        const b = getElementBounds(el);
+        if (b.x < minX) minX = b.x;
+        if (b.y < minY) minY = b.y;
+        if (b.x + b.width > maxX) maxX = b.x + b.width;
+        if (b.y + b.height > maxY) maxY = b.y + b.height;
+        found = true;
+      }
+    }
+    if (!found) return null;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }, [scene]);
+
+  /**
+   * Returns the set of unique groupIds shared by ALL selected elements.
+   * Only returns a groupId if every selected element has it.
+   */
+  const getSelectedGroupIds = useCallback((): string[] => {
+    if (selectedIds.length === 0) return [];
+    const elements = scene.getElements();
+    // Collect all groupIds from the first selected element
+    const firstEl = elements.find((e) => e.id === selectedIds[0]);
+    if (!firstEl || firstEl.groupIds.length === 0) return [];
+    // Filter to only groupIds that ALL selected elements share
+    return firstEl.groupIds.filter((gid) =>
+      selectedIds.every((id) => {
+        const el = elements.find((e) => e.id === id);
+        return el && el.groupIds.includes(gid);
+      }),
+    );
+  }, [scene, selectedIds]);
+
   // Expose export, undo, redo functions to parent via ref
   useImperativeHandle(ref, () => ({
     exportPng: () => {
@@ -336,8 +386,36 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     },
     undo,
     redo,
+    groupSelectedElements: () => {
+      if (selectedIds.length < 2) return;
+      history.push();
+      scene.groupElements(selectedIds);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
+    ungroupSelectedElements: () => {
+      // Find the shared groupId among selected elements
+      if (selectedIds.length === 0) return;
+      const elements = scene.getElements();
+      const firstEl = elements.find((e) => e.id === selectedIds[0]);
+      if (!firstEl || firstEl.groupIds.length === 0) return;
+      // Find a groupId that all selected elements share
+      const sharedGroupId = firstEl.groupIds.find((gid) =>
+        selectedIds.every((id) => {
+          const el = elements.find((e) => e.id === id);
+          return el && el.groupIds.includes(gid);
+        }),
+      );
+      if (!sharedGroupId) return;
+      history.push();
+      scene.ungroupElements(selectedIds, sharedGroupId);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [scene, userId, shapeOwners, themeMode, undo, redo]);
+  }), [scene, userId, shapeOwners, themeMode, undo, redo, selectedIds, history, onSceneMutate]);
 
   // --- drawShape: render a SceneElement using native Canvas 2D ---
 
@@ -714,34 +792,56 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     // Draw selection bounding boxes and resize handles
     const elements = scene.getElements();
-    for (const selId of selectedIds) {
-      const el = elements.find((e) => e.id === selId);
-      if (!el) continue;
-      const bbox = getBBox(el);
-      if (!bbox) continue;
+    const selectedGroupIds = getSelectedGroupIds();
+    const isGroupSelection = selectedGroupIds.length > 0;
 
-      const ownerId = shapeOwners.get(el.id);
-      const isRemote = ownerId && ownerId !== userId;
-      ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-      ctx.lineWidth = 1.5 / scale;
-      ctx.setLineDash([5 / scale, 3 / scale]);
-      ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
-      ctx.setLineDash([]);
+    if (isGroupSelection) {
+      // Draw a single dashed border around the union bounding box of the group
+      const groupId = selectedGroupIds[0];
+      const groupBBox = getGroupBBox(groupId);
+      if (groupBBox) {
+        const bbox = getBBox(groupBBox as unknown as SceneElement);
+        if (bbox) {
+          ctx.save();
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 1.5 / scale;
+          ctx.setLineDash([5 / scale, 3 / scale]);
+          ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    } else {
+      // Draw individual selection borders and resize handles for non-group selections
+      for (const selId of selectedIds) {
+        const el = elements.find((e) => e.id === selId);
+        if (!el) continue;
+        const bbox = getBBox(el);
+        if (!bbox) continue;
 
-      const handles = getHandlePositions(bbox);
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-      ctx.lineWidth = 1.5 / scale;
+        const ownerId = shapeOwners.get(el.id);
+        const isRemote = ownerId && ownerId !== userId;
+        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+        ctx.lineWidth = 1.5 / scale;
+        ctx.setLineDash([5 / scale, 3 / scale]);
+        ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+        ctx.setLineDash([]);
 
-      for (const pos of Object.values(handles)) {
-        const hs = HANDLE_SIZE / scale;
-        ctx.fillRect(pos.x, pos.y, hs, hs);
-        ctx.strokeRect(pos.x, pos.y, hs, hs);
+        const handles = getHandlePositions(bbox);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+        ctx.lineWidth = 1.5 / scale;
+
+        for (const pos of Object.values(handles)) {
+          const hs = HANDLE_SIZE / scale;
+          ctx.fillRect(pos.x, pos.y, hs, hs);
+          ctx.strokeRect(pos.x, pos.y, hs, hs);
+        }
       }
     }
 
     ctx.restore();
-  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, shapeOwners, userId, scale, themeMode, applyCanvasTransform, drawShape]);
+  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, getSelectedGroupIds, getGroupBBox, shapeOwners, userId, scale, themeMode, applyCanvasTransform, drawShape]);
 
   // Master redraw
   const redrawCanvas = useCallback(() => {
@@ -754,6 +854,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     renderStaticScene();
     renderInteractive();
   }, [renderBackground, renderStaticScene, renderInteractive]);
+
+  // Sync render refs for use in useImperativeHandle
+  useEffect(() => {
+    redrawAllRef.current = redrawAll;
+    renderStaticSceneRef.current = renderStaticScene;
+    renderInteractiveRef.current = renderInteractive;
+  }, [redrawAll, renderStaticScene, renderInteractive]);
 
   // --- ToolHandler integration ---
 
@@ -862,6 +969,44 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       if (e.key === 'Escape') {
         onSelectedIdsChange([]);
+      }
+
+      // Ctrl+G / Cmd+G: Group selected elements
+      if (e.key === 'g' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        if (locked) return;
+        if (selectedIds.length >= 2) {
+          e.preventDefault();
+          history.push();
+          scene.groupElements(selectedIds);
+          onSceneMutate('update');
+          renderStaticScene();
+          renderInteractive();
+        }
+      }
+
+      // Ctrl+Shift+G / Cmd+Shift+G: Ungroup selected elements
+      if (e.key === 'G' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+        if (locked) return;
+        if (selectedIds.length > 0) {
+          const elements = scene.getElements();
+          const firstEl = elements.find((el) => el.id === selectedIds[0]);
+          if (firstEl && firstEl.groupIds.length > 0) {
+            const sharedGroupId = firstEl.groupIds.find((gid) =>
+              selectedIds.every((id) => {
+                const el = elements.find((e) => e.id === id);
+                return el && el.groupIds.includes(gid);
+              }),
+            );
+            if (sharedGroupId) {
+              e.preventDefault();
+              history.push();
+              scene.ungroupElements(selectedIds, sharedGroupId);
+              onSceneMutate('update');
+              renderStaticScene();
+              renderInteractive();
+            }
+          }
+        }
       }
     };
 
@@ -980,29 +1125,71 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
       // Selection bounding boxes
       const elements = scene.getElements();
-      for (const selId of selectedIds) {
-        const el = elements.find((e) => e.id === selId);
-        if (!el) continue;
-        const bbox = getBBox(el);
-        if (!bbox) continue;
 
-        const ownerId = shapeOwners.get(el.id);
-        const isRemote = ownerId && ownerId !== userId;
-        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-        ctx.lineWidth = 1.5 / newScale;
-        ctx.setLineDash([5 / newScale, 3 / newScale]);
-        ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
-        ctx.setLineDash([]);
+      // Check if selected elements share a groupId
+      const hasGroupSelection = selectedIds.length > 0 && selectedIds.some((id) => {
+        const el = scene.getElement(id);
+        return el && el.groupIds.length > 0;
+      });
 
-        const handles = getHandlePositions(bbox);
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-        ctx.lineWidth = 1.5 / newScale;
+      if (hasGroupSelection && selectedIds.length > 0) {
+        // For group selections, draw a single dashed border around the union bbox
+        const groupId = selectedIds[0];
+        const el = scene.getElement(groupId);
+        if (el && el.groupIds.length > 0) {
+          const sharedGroupId = el.groupIds[0];
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const otherEl of elements) {
+            if (otherEl.groupIds.includes(sharedGroupId)) {
+              const b = getElementBounds(otherEl);
+              if (b.x < minX) minX = b.x;
+              if (b.y < minY) minY = b.y;
+              if (b.x + b.width > maxX) maxX = b.x + b.width;
+              if (b.y + b.height > maxY) maxY = b.y + b.height;
+            }
+          }
+          if (minX !== Infinity) {
+            const paddedBBox = {
+              x: minX - BBOX_PADDING,
+              y: minY - BBOX_PADDING,
+              width: maxX - minX + BBOX_PADDING * 2,
+              height: maxY - minY + BBOX_PADDING * 2,
+            };
+            ctx.save();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.5 / newScale;
+            ctx.setLineDash([5 / newScale, 3 / newScale]);
+            ctx.strokeRect(paddedBBox.x, paddedBBox.y, paddedBBox.width, paddedBBox.height);
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+      } else {
+        // For non-group selections, draw individual borders and handles
+        for (const selId of selectedIds) {
+          const el = elements.find((e) => e.id === selId);
+          if (!el) continue;
+          const bbox = getBBox(el);
+          if (!bbox) continue;
 
-        for (const pos of Object.values(handles)) {
-          const hs = HANDLE_SIZE / newScale;
-          ctx.fillRect(pos.x, pos.y, hs, hs);
-          ctx.strokeRect(pos.x, pos.y, hs, hs);
+          const ownerId = shapeOwners.get(el.id);
+          const isRemote = ownerId && ownerId !== userId;
+          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          ctx.lineWidth = 1.5 / newScale;
+          ctx.setLineDash([5 / newScale, 3 / newScale]);
+          ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+          ctx.setLineDash([]);
+
+          const handles = getHandlePositions(bbox);
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+          ctx.lineWidth = 1.5 / newScale;
+
+          for (const pos of Object.values(handles)) {
+            const hs = HANDLE_SIZE / newScale;
+            ctx.fillRect(pos.x, pos.y, hs, hs);
+            ctx.strokeRect(pos.x, pos.y, hs, hs);
+          }
         }
       }
 
@@ -1281,7 +1468,12 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     // Select tool: hit-testing, resize handle detection, move/resize mode entry
-    const handle = hitTestHandles(world);
+    // Disable resize handles for group selections — groups can only be moved, not resized
+    const hasGroupedElement = selectedIds.some((id) => {
+      const el = scene.getElement(id);
+      return el && el.groupIds.length > 0;
+    });
+    const handle = hasGroupedElement ? null : hitTestHandles(world);
     const primaryId = selectedIds[selectedIds.length - 1];
     if (handle && primaryId) {
       const el = scene.getElement(primaryId);
@@ -1296,7 +1488,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
     const hitEl = hitTestElements(world);
     if (hitEl) {
-      onSelectedIdsChange([hitEl.id]);
+      // If the clicked element belongs to a group, select all group members
+      const groupIds = scene.getGroupElementIds(hitEl.id);
+      if (groupIds.length > 0) {
+        onSelectedIdsChange(groupIds);
+      } else {
+        onSelectedIdsChange([hitEl.id]);
+      }
       const bounds = getElementBounds(hitEl);
       moveOffset.current = { x: world.x - bounds.x, y: world.y - bounds.y };
       setInteractionMode('moving');
@@ -1434,26 +1632,65 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
         interactiveCtx.save();
         applyCanvasTransformFromRefs(interactiveCtx);
-        for (const selId of selectedIds) {
-          const el = elements.find((e) => e.id === selId);
-          if (!el) continue;
-          const bbox = getBBox(el);
-          if (!bbox) continue;
-          const ownerId = shapeOwners.get(el.id);
-          const isRemote = ownerId && ownerId !== userId;
-          interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-          interactiveCtx.lineWidth = 1.5 / scaleRef.current;
-          interactiveCtx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
-          interactiveCtx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
-          interactiveCtx.setLineDash([]);
-          const handles = getHandlePositions(bbox);
-          interactiveCtx.fillStyle = '#ffffff';
-          interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
-          interactiveCtx.lineWidth = 1.5 / scaleRef.current;
-          for (const pos of Object.values(handles)) {
-            const hs = HANDLE_SIZE / scaleRef.current;
-            interactiveCtx.fillRect(pos.x, pos.y, hs, hs);
-            interactiveCtx.strokeRect(pos.x, pos.y, hs, hs);
+
+        // Check for group selection
+        const hasGroupSel = selectedIds.some((id) => {
+          const el = scene.getElement(id);
+          return el && el.groupIds.length > 0;
+        });
+
+        if (hasGroupSel && selectedIds.length > 0) {
+          const firstEl = scene.getElement(selectedIds[0]);
+          if (firstEl && firstEl.groupIds.length > 0) {
+            const gid = firstEl.groupIds[0];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const otherEl of elements) {
+              if (otherEl.groupIds.includes(gid)) {
+                const b = getElementBounds(otherEl);
+                if (b.x < minX) minX = b.x;
+                if (b.y < minY) minY = b.y;
+                if (b.x + b.width > maxX) maxX = b.x + b.width;
+                if (b.y + b.height > maxY) maxY = b.y + b.height;
+              }
+            }
+            if (minX !== Infinity) {
+              const paddedBBox = {
+                x: minX - BBOX_PADDING,
+                y: minY - BBOX_PADDING,
+                width: maxX - minX + BBOX_PADDING * 2,
+                height: maxY - minY + BBOX_PADDING * 2,
+              };
+              interactiveCtx.save();
+              interactiveCtx.strokeStyle = '#3b82f6';
+              interactiveCtx.lineWidth = 1.5 / scaleRef.current;
+              interactiveCtx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
+              interactiveCtx.strokeRect(paddedBBox.x, paddedBBox.y, paddedBBox.width, paddedBBox.height);
+              interactiveCtx.setLineDash([]);
+              interactiveCtx.restore();
+            }
+          }
+        } else {
+          for (const selId of selectedIds) {
+            const el = elements.find((e) => e.id === selId);
+            if (!el) continue;
+            const bbox = getBBox(el);
+            if (!bbox) continue;
+            const ownerId = shapeOwners.get(el.id);
+            const isRemote = ownerId && ownerId !== userId;
+            interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+            interactiveCtx.lineWidth = 1.5 / scaleRef.current;
+            interactiveCtx.setLineDash([5 / scaleRef.current, 3 / scaleRef.current]);
+            interactiveCtx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+            interactiveCtx.setLineDash([]);
+            const handles = getHandlePositions(bbox);
+            interactiveCtx.fillStyle = '#ffffff';
+            interactiveCtx.strokeStyle = isRemote && ownerId !== '__remote__' ? (ownerId.split('-')[0] ?? '#3b82f6') : '#3b82f6';
+            interactiveCtx.lineWidth = 1.5 / scaleRef.current;
+            for (const pos of Object.values(handles)) {
+              const hs = HANDLE_SIZE / scaleRef.current;
+              interactiveCtx.fillRect(pos.x, pos.y, hs, hs);
+              interactiveCtx.strokeRect(pos.x, pos.y, hs, hs);
+            }
           }
         }
         interactiveCtx.restore();
@@ -1468,16 +1705,22 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       return;
     }
 
-    // Update cursor style based on hover
+    // Update cursor style based on hover (skip resize cursors for group selections)
     if (activeTool === 'select' && selectedIds.length > 0) {
-      const handle = hitTestHandles(point);
-      if (handle) {
-        const cursorMap: Record<string, string> = {
-          nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
-          n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
-        };
-        interactiveCanvasRef.current!.style.cursor = cursorMap[handle];
-        return;
+      const hasGrouped = selectedIds.some((id) => {
+        const el = scene.getElement(id);
+        return el && el.groupIds.length > 0;
+      });
+      if (!hasGrouped) {
+        const handle = hitTestHandles(point);
+        if (handle) {
+          const cursorMap: Record<string, string> = {
+            nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+            n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+          };
+          interactiveCanvasRef.current!.style.cursor = cursorMap[handle];
+          return;
+        }
       }
     }
 
