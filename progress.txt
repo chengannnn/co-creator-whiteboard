@@ -49,3 +49,15 @@ Started: Tue Apr 15 2026
 - **Files changed:** `prd.json`
 - Typecheck passes
 ---
+
+## [2026-04-15 10:55] - US-004
+- Verified left/up/diagonal drag drawing is already correctly implemented
+- **Verification:**
+  - RectangleHandler.onPointerMove: uses Math.min(el.x, worldX) for x/y and Math.abs() for width/height
+  - LineHandler.onPointerMove: uses relative dx/dy points, works in all directions
+  - FreehandHandler.onPointerMove: recomputes bounding box from all points using Math.min/Math.max
+  - Committed shapes use correct position and dimensions on Static Canvas
+- Marked US-004 as passes: true in PRD
+- **Files changed:** `prd.json`
+- Typecheck passes
+---
