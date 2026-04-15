@@ -518,6 +518,22 @@ function WhiteboardRoom() {
     canvasRef.current?.ungroupSelectedElements();
   }, []);
 
+  const handleBringToFront = useCallback(() => {
+    canvasRef.current?.bringToFront();
+  }, []);
+
+  const handleSendToBack = useCallback(() => {
+    canvasRef.current?.sendToBack();
+  }, []);
+
+  const handleBringForward = useCallback(() => {
+    canvasRef.current?.bringForward();
+  }, []);
+
+  const handleSendBackward = useCallback(() => {
+    canvasRef.current?.sendBackward();
+  }, []);
+
   // Unified zoom control
   const setZoom = useCallback((newZoom: number) => {
     setScale((prev) => {
@@ -555,6 +571,11 @@ function WhiteboardRoom() {
         selectedElements={selectedIds.map((id) => sceneRef.current.getElement(id)).filter((el): el is SceneElement => el !== undefined)}
         onGroup={handleGroup}
         onUngroup={handleUngroup}
+        onBringToFront={handleBringToFront}
+        onSendToBack={handleSendToBack}
+        onBringForward={handleBringForward}
+        onSendBackward={handleSendBackward}
+        allElements={sceneRef.current.getElements()}
       />
       <CanvasComponent
         ref={canvasRef}

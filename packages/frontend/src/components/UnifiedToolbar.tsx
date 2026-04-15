@@ -31,6 +31,38 @@ const GroupIcon = () => (
   </svg>
 );
 
+/** SVG icon for Bring to Front (stack with top element highlighted). */
+const BringToFrontIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+    <rect x="3" y="3" width="12" height="12" rx="1" opacity="0.4" />
+  </svg>
+);
+
+/** SVG icon for Send to Back (stack with bottom element highlighted). */
+const SendToBackIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="6" width="12" height="12" rx="1" opacity="0.4" />
+    <rect x="3" y="3" width="12" height="12" rx="1" />
+  </svg>
+);
+
+/** SVG icon for Bring Forward (two stacked rects, upper highlighted). */
+const BringForwardIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="7" y="7" width="12" height="12" rx="1" />
+    <rect x="4" y="4" width="12" height="12" rx="1" opacity="0.4" />
+  </svg>
+);
+
+/** SVG icon for Send Backward (two stacked rects, lower highlighted). */
+const SendBackwardIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="7" y="7" width="12" height="12" rx="1" opacity="0.4" />
+    <rect x="4" y="4" width="12" height="12" rx="1" />
+  </svg>
+);
+
 const UNIFIED_COLORS = [
   '#000000', // black
   '#e03131', // red
@@ -111,6 +143,11 @@ interface UnifiedToolbarProps {
   selectedElements: SceneElement[];
   onGroup: () => void;
   onUngroup: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
+  onBringForward: () => void;
+  onSendBackward: () => void;
+  allElements: SceneElement[];
 }
 
 export default function UnifiedToolbar({
@@ -135,6 +172,11 @@ export default function UnifiedToolbar({
   selectedElements,
   onGroup,
   onUngroup,
+  onBringToFront,
+  onSendToBack,
+  onBringForward,
+  onSendBackward,
+  allElements,
 }: UnifiedToolbarProps) {
   const theme = getThemeColors(themeMode);
   const canRoundCorner = activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
@@ -663,6 +705,133 @@ export default function UnifiedToolbar({
                 )}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '20px', backgroundColor: theme.divider }} />
+
+        {/* Layer management section */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <span style={{ fontSize: '9px', color: theme.textMuted, lineHeight: 1 }}>Layer</span>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {(() => {
+              const isSingleElement = selectedElements.length === 1;
+              const isGrouped = selectedElements.length === 1 && selectedElements[0].groupIds.length > 0;
+              const canOperate = isSingleElement && !isGrouped;
+
+              // Find the selected element's index in the allElements array
+              const selectedIndex = canOperate
+                ? allElements.findIndex((el) => el.id === selectedElements[0].id)
+                : -1;
+
+              const isFirst = selectedIndex === 0;
+              const isLast = selectedIndex === allElements.length - 1;
+
+              const layerButtonStyle = (
+                disabled: boolean,
+                isActive: boolean,
+              ): React.CSSProperties => ({
+                width: '24px',
+                height: '22px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: isActive ? `2px solid ${theme.btnActiveBorder}` : '1px solid transparent',
+                borderRadius: '4px',
+                backgroundColor: isActive ? theme.btnActiveBg : theme.btnDefaultBg,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                color: disabled ? theme.textMuted : theme.textPrimary,
+                opacity: disabled ? 0.4 : 1,
+                transition: 'all 0.15s ease',
+                padding: 0,
+              });
+
+              return (
+                <>
+                  {/* Bring Forward */}
+                  <button
+                    title="Bring Forward"
+                    disabled={!canOperate || isLast}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canOperate) onBringForward();
+                    }}
+                    style={layerButtonStyle(!canOperate || isLast, false)}
+                    onMouseEnter={(e) => {
+                      if (canOperate && !isLast) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+                    }}
+                  >
+                    <BringForwardIcon />
+                  </button>
+                  {/* Send Backward */}
+                  <button
+                    title="Send Backward"
+                    disabled={!canOperate || isFirst}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canOperate) onSendBackward();
+                    }}
+                    style={layerButtonStyle(!canOperate || isFirst, false)}
+                    onMouseEnter={(e) => {
+                      if (canOperate && !isFirst) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+                    }}
+                  >
+                    <SendBackwardIcon />
+                  </button>
+                  {/* Bring to Front */}
+                  <button
+                    title="Bring to Front"
+                    disabled={!canOperate || isLast}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canOperate) onBringToFront();
+                    }}
+                    style={layerButtonStyle(!canOperate || isLast, false)}
+                    onMouseEnter={(e) => {
+                      if (canOperate && !isLast) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+                    }}
+                  >
+                    <BringToFrontIcon />
+                  </button>
+                  {/* Send to Back */}
+                  <button
+                    title="Send to Back"
+                    disabled={!canOperate || isFirst}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canOperate) onSendToBack();
+                    }}
+                    style={layerButtonStyle(!canOperate || isFirst, false)}
+                    onMouseEnter={(e) => {
+                      if (canOperate && !isFirst) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+                    }}
+                  >
+                    <SendToBackIcon />
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
 
