@@ -156,3 +156,20 @@ Started: Tue Apr 15 2026
   - History.push() must be called BEFORE the mutation to capture the pre-change state for undo
   - All layer operations are no-ops when selectedIds.length !== 1
 ---
+
+## [2026-04-15 23:00] - US-005
+- Added 4 SVG icon components: BringToFrontIcon, SendToBackIcon, BringForwardIcon, SendBackwardIcon
+- Added Layer section to Row 2 of UnifiedToolbar between Style and Save, labeled "Layer"
+- 4 icon buttons in a horizontal group: Bring Forward, Send Backward, Bring to Front, Send to Back
+- Disabled state: when no selection, multiple selection, or group selection (single element with groupIds)
+- Send Backward/Send to Back disabled when element is at index 0 (first visible)
+- Bring Forward/Bring to Front disabled when element is at last index
+- Added callbacks (onBringToFront, onSendToBack, onBringForward, onSendBackward) in App.tsx delegating to canvasRef
+- Passed allElements from sceneRef.current.getElements() for position calculation
+- Disabled buttons use opacity: 0.4 and cursor: not-allowed; enabled buttons show hover/active states
+- Typecheck passes
+- **Learnings for future iterations:**
+  - UnifiedToolbar Row 2 structure: Colors | Width | Style | Layer | Save | Clear | Theme
+  - Button disabled logic uses computed IIFE to derive state from selectedElements and allElements props
+  - Layer operations require both single selection AND non-grouped element (same constraints as US-004)
+---
