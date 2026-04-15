@@ -50,6 +50,38 @@ export function findElementsAtPoint(
 }
 
 /**
+ * Check if two AABB rectangles intersect.
+ */
+export function rectsIntersect(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x &&
+         a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+/**
+ * Find all non-deleted elements whose bounding boxes intersect the given rectangle.
+ * Returns element IDs in reverse z-order (top-most first).
+ */
+export function findElementsInRect(
+  rect: { x: number; y: number; width: number; height: number },
+  elements: SceneElement[],
+): string[] {
+  const ids: string[] = [];
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (!el.isDeleted) {
+      const bounds = getWorldBounds(el);
+      if (rectsIntersect(rect, bounds)) {
+        ids.push(el.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
  * Interpolate points between prev and curr with given step distance.
  */
 export function interpolatePoints(prev: Point, curr: Point, step: number): Point[] {

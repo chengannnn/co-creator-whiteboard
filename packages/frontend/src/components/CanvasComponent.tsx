@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
+import { findElementsInRect } from '../core/hitTesting';
 import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement, Arrowhead } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 import {
@@ -151,6 +152,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   // Draft element for ToolHandler-based drawing
   const draftRef = useRef<DraftElement | null>(null);
   const activeHandlerRef = useRef<ToolHandlerType | null>(null);
+
+  // Marquee selection state
+  const marqueeStart = useRef<Point | null>(null);
+  const marqueeEnd = useRef<Point | null>(null);
 
   // Keep refs in sync with props
   useEffect(() => { scaleRef.current = scale; }, [scale]);
@@ -688,6 +693,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         ctx.setLineDash([]);
         ctx.restore();
       }
+    }
+
+    // Marquee selection: draw semi-transparent blue rectangle
+    if (interactionMode === 'selecting' && marqueeStart.current && marqueeEnd.current) {
+      const mx = Math.min(marqueeStart.current.x, marqueeEnd.current.x);
+      const my = Math.min(marqueeStart.current.y, marqueeEnd.current.y);
+      const mw = Math.abs(marqueeEnd.current.x - marqueeStart.current.x);
+      const mh = Math.abs(marqueeEnd.current.y - marqueeStart.current.y);
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 120, 255, 0.1)';
+      ctx.strokeStyle = '#0078ff';
+      ctx.lineWidth = 1.5 / scaleRef.current;
+      ctx.setLineDash([6 / scaleRef.current, 4 / scaleRef.current]);
+      ctx.fillRect(mx, my, mw, mh);
+      ctx.strokeRect(mx, my, mw, mh);
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // Draw selection bounding boxes and resize handles
@@ -1280,6 +1302,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       setInteractionMode('moving');
     } else {
       onSelectedIdsChange([]);
+      marqueeStart.current = world;
+      marqueeEnd.current = null;
       setInteractionMode('selecting');
     }
   };
@@ -1437,6 +1461,13 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       return;
     }
 
+    // Marquee selection: draw rectangle and highlight intersecting elements
+    if (interactionMode === 'selecting' && marqueeStart.current) {
+      marqueeEnd.current = point;
+      renderInteractive();
+      return;
+    }
+
     // Update cursor style based on hover
     if (activeTool === 'select' && selectedIds.length > 0) {
       const handle = hitTestHandles(point);
@@ -1536,6 +1567,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     if (interactionMode === 'selecting') {
+      const start = marqueeStart.current;
+      const end = marqueeEnd.current;
+      if (start && end) {
+        const mx = Math.min(start.x, end.x);
+        const my = Math.min(start.y, end.y);
+        const mw = Math.abs(end.x - start.x);
+        const mh = Math.abs(end.y - start.y);
+        // Only select if marquee is large enough (not a click)
+        if (mw > 3 || mh > 3) {
+          const elements = scene.getElements();
+          const ids = findElementsInRect({ x: mx, y: my, width: mw, height: mh }, elements);
+          onSelectedIdsChange(ids);
+        }
+      }
+      marqueeStart.current = null;
+      marqueeEnd.current = null;
+      renderInteractive();
       setInteractionMode('idle');
     }
   };
