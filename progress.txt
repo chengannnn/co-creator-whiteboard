@@ -225,3 +225,19 @@ Started: Tue Apr 15 2026
   - React state setters (setPanX, setPanY, setScale) require functional updates when the zoom formula needs current values from multiple state variables
   - The zoomFromCenter formula is algebraically equivalent to the scaleRatio approach but more explicit about world coordinate anchoring
 ---
+
+## [2026-04-16 00:00] - US-003
+- Replaced all 4 layer management icons with minimal arrow SVGs in UnifiedToolbar.tsx
+- Bring Forward: simple upward arrow (polyline + line)
+- Send Backward: simple downward arrow (polyline + line)
+- Bring to Front: upward arrow with horizontal line above it (top barrier style)
+- Send to Back: downward arrow with horizontal line below it (bottom barrier style)
+- Replaced previous stacked-rectangle icons with opacity-based layering metaphor
+- All icons remain as SVG elements rendered inside button wrappers — disabled/hover states unchanged
+- Button layout, spacing, and dividers remain unchanged
+- Click handlers unchanged — each button still triggers the same layer operation
+- Typecheck passes
+- **Learnings for future iterations:**
+  - UnifiedToolbar icon components are simple inline SVGs using currentColor for theming
+  - SVG icons use viewBox="0 0 24 24" with 18x18 rendered size — consistent sizing across all toolbar icons
+---

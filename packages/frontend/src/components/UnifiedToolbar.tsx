@@ -31,35 +31,37 @@ const GroupIcon = () => (
   </svg>
 );
 
-/** SVG icon for Bring to Front (stack with top element highlighted). */
+/** SVG icon for Bring to Front — upward arrow with horizontal line above it (top barrier). */
 const BringToFrontIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="6" y="6" width="12" height="12" rx="1" />
-    <rect x="3" y="3" width="12" height="12" rx="1" opacity="0.4" />
+    <line x1="4" y1="5" x2="20" y2="5" />
+    <polyline points="12 19 12 9" />
+    <polyline points="8 13 12 9 16 13" />
   </svg>
 );
 
-/** SVG icon for Send to Back (stack with bottom element highlighted). */
+/** SVG icon for Send to Back — downward arrow with horizontal line below it (bottom barrier). */
 const SendToBackIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="6" y="6" width="12" height="12" rx="1" opacity="0.4" />
-    <rect x="3" y="3" width="12" height="12" rx="1" />
+    <polyline points="12 5 12 15" />
+    <polyline points="8 11 12 15 16 11" />
+    <line x1="4" y1="19" x2="20" y2="19" />
   </svg>
 );
 
-/** SVG icon for Bring Forward (two stacked rects, upper highlighted). */
+/** SVG icon for Bring Forward — simple upward arrow. */
 const BringForwardIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="7" y="7" width="12" height="12" rx="1" />
-    <rect x="4" y="4" width="12" height="12" rx="1" opacity="0.4" />
+    <polyline points="8 15 12 11 16 15" />
+    <line x1="12" y1="11" x2="12" y2="19" />
   </svg>
 );
 
-/** SVG icon for Send Backward (two stacked rects, lower highlighted). */
+/** SVG icon for Send Backward — simple downward arrow. */
 const SendBackwardIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="7" y="7" width="12" height="12" rx="1" opacity="0.4" />
-    <rect x="4" y="4" width="12" height="12" rx="1" />
+    <polyline points="8 9 12 13 16 9" />
+    <line x1="12" y1="5" x2="12" y2="13" />
   </svg>
 );
 
