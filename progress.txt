@@ -8,6 +8,7 @@ Started: Tue Apr 15 2026
 - Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
 - Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
 - Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
 
 ## [2026-04-15 17:44] - US-001
 - Verified US-001 implementation: reverse drag coordinate normalization already in place
@@ -19,4 +20,14 @@ Started: Tue Apr 15 2026
   - The `getBaseShapeTool` function in CanvasComponent maps tool variants (e.g., `rectangle-solid`) to base types for handler logic
   - `MIN_DIMENSION = 3` in RectangleHandler prevents tiny shapes from being committed
   - All shape drawing uses native Canvas 2D APIs (drawShape function at CanvasComponent.tsx:339)
+---
+
+## [2026-04-15 18:10] - US-002
+- Implemented absolute coordinate calculation for resize handles
+- CanvasComponent.tsx: Rewrote `applyResize` to use `mouseX`/`mouseY` directly instead of `dx`/`dy` deltas. Each handle locks its opposite anchor corner and recalculates dimensions absolutely. Minimum dimension changed from 1px to 5px.
+- SelectToolHandler.ts: Same rewrite applied to duplicate `applyResize` function. Removed unused `resizeStartBounds` from state.
+- Typecheck passes
+- **Learnings for future iterations:**
+  - There are two copies of resize logic: CanvasComponent.tsx (primary, used by React pointer events) and SelectToolHandler.ts (standalone handler). Both must be kept in sync.
+  - The old delta-based approach (`width += dx`) caused drift because deltas were computed from original bounds but applied to already-modified bounds.
 ---

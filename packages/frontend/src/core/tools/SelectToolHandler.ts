@@ -9,7 +9,6 @@ interface SelectState {
   selectedId: string | null;
   activeHandle: ResizeHandle | null;
   moveOffset: Point;
-  resizeStartBounds: { x: number; y: number; width: number; height: number };
   startWorld: Point;
 }
 
@@ -19,7 +18,6 @@ function createInitialState(): SelectState {
     selectedId: null,
     activeHandle: null,
     moveOffset: { x: 0, y: 0 },
-    resizeStartBounds: { x: 0, y: 0, width: 0, height: 0 },
     startWorld: { x: 0, y: 0 },
   };
 }
@@ -152,56 +150,72 @@ export function createSelectToolHandler(
   function applyResize(
     el: SceneElement,
     handle: ResizeHandle,
-    dx: number,
-    dy: number,
+    mouseX: number,
+    mouseY: number,
   ): SceneElement {
     const bounds = getElementBounds(el);
     let { x, y, width, height } = bounds;
 
-    switch (handle) {
-      case 'se':
-        width += dx;
-        height += dy;
-        break;
-      case 'sw':
-        x += dx;
-        width -= dx;
-        height += dy;
-        break;
-      case 'ne':
-        width += dx;
-        y += dy;
-        height -= dy;
-        break;
-      case 'nw':
-        x += dx;
-        y += dy;
-        width -= dx;
-        height -= dy;
-        break;
-      case 'n':
-        y += dy;
-        height -= dy;
-        break;
-      case 's':
-        height += dy;
-        break;
-      case 'e':
-        width += dx;
-        break;
-      case 'w':
-        x += dx;
-        width -= dx;
-        break;
-    }
+    const MIN_DIM = 5;
 
-    if (width < 10) {
-      x -= 10 - width;
-      width = 10;
-    }
-    if (height < 10) {
-      y -= 10 - height;
-      height = 10;
+    switch (handle) {
+      case 'se': {
+        // Lock top-left corner, recalculate width/height from mouse
+        width = Math.max(mouseX - x, MIN_DIM);
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'sw': {
+        // Lock bottom-right corner, recalculate x/width from mouse
+        const right = x + width;
+        x = Math.min(mouseX, right - MIN_DIM);
+        width = right - x;
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'ne': {
+        // Lock bottom-left corner, recalculate y/height and width from mouse
+        const left = x;
+        const bottom = y + height;
+        width = Math.max(mouseX - left, MIN_DIM);
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        height = bottom - y;
+        break;
+      }
+      case 'nw': {
+        // Lock bottom-right corner, recalculate x/y/width/height from mouse
+        const right = x + width;
+        const bottom = y + height;
+        x = Math.min(mouseX, right - MIN_DIM);
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        width = right - x;
+        height = bottom - y;
+        break;
+      }
+      case 'n': {
+        // Lock bottom edge, recalculate y/height from mouse
+        const bottom = y + height;
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        height = bottom - y;
+        break;
+      }
+      case 's': {
+        // Lock top edge, recalculate height from mouse
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'e': {
+        // Lock left edge, recalculate width from mouse
+        width = Math.max(mouseX - x, MIN_DIM);
+        break;
+      }
+      case 'w': {
+        // Lock right edge, recalculate x/width from mouse
+        const right = x + width;
+        x = Math.min(mouseX, right - MIN_DIM);
+        width = right - x;
+        break;
+      }
     }
 
     if (el.type === 'freehand') {
@@ -240,8 +254,6 @@ export function createSelectToolHandler(
         const elements = getElements();
         const el = elements.find((e) => e.id === primaryId);
         if (el) {
-          const bounds = getElementBounds(el);
-          state.resizeStartBounds = { ...bounds };
           state.activeHandle = handle;
           state.selectedId = primaryId;
           state.mode = 'resizing';
@@ -307,11 +319,7 @@ export function createSelectToolHandler(
         const el = currentElements.find((e) => e.id === state.selectedId);
         if (!el) return;
 
-        const orig = state.resizeStartBounds;
-        const dx = worldX - (orig.x + (state.activeHandle.includes('e') ? orig.width : 0));
-        const dy = worldY - (orig.y + (state.activeHandle.includes('s') ? orig.height : 0));
-
-        const resized = applyResize(el, state.activeHandle, dx, dy);
+        const resized = applyResize(el, state.activeHandle, worldX, worldY);
         const newElements = currentElements.map((e) => (e.id === state.selectedId ? resized : e));
 
         moveElements = newElements;

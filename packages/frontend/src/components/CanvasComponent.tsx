@@ -1063,30 +1063,78 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     return null;
   };
 
-  // --- Resize helper ---
+  // --- Resize helper (absolute coordinate calculation) ---
 
   const applyResize = (
     el: SceneElement,
     handle: 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w',
-    dx: number,
-    dy: number,
+    mouseX: number,
+    mouseY: number,
   ): SceneElement => {
     const bounds = getElementBounds(el);
     let { x, y, width, height } = bounds;
 
-    switch (handle) {
-      case 'se': width += dx; height += dy; break;
-      case 'sw': x += dx; width -= dx; height += dy; break;
-      case 'ne': width += dx; y += dy; height -= dy; break;
-      case 'nw': x += dx; y += dy; width -= dx; height -= dy; break;
-      case 'n': y += dy; height -= dy; break;
-      case 's': height += dy; break;
-      case 'e': width += dx; break;
-      case 'w': x += dx; width -= dx; break;
-    }
+    const MIN_DIM = 5;
 
-    if (width < 1) { x -= 1 - width; width = 1; }
-    if (height < 1) { y -= 1 - height; height = 1; }
+    switch (handle) {
+      case 'se': {
+        // Lock top-left corner, recalculate width/height from mouse
+        width = Math.max(mouseX - x, MIN_DIM);
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'sw': {
+        // Lock bottom-right corner, recalculate x/width from mouse
+        const right = x + width;
+        x = Math.min(mouseX, right - MIN_DIM);
+        width = right - x;
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'ne': {
+        // Lock bottom-left corner, recalculate y/height and width from mouse
+        const left = x;
+        const bottom = y + height;
+        width = Math.max(mouseX - left, MIN_DIM);
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        height = bottom - y;
+        break;
+      }
+      case 'nw': {
+        // Lock bottom-right corner, recalculate x/y/width/height from mouse
+        const right = x + width;
+        const bottom = y + height;
+        x = Math.min(mouseX, right - MIN_DIM);
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        width = right - x;
+        height = bottom - y;
+        break;
+      }
+      case 'n': {
+        // Lock bottom edge, recalculate y/height from mouse
+        const bottom = y + height;
+        y = Math.min(mouseY, bottom - MIN_DIM);
+        height = bottom - y;
+        break;
+      }
+      case 's': {
+        // Lock top edge, recalculate height from mouse
+        height = Math.max(mouseY - y, MIN_DIM);
+        break;
+      }
+      case 'e': {
+        // Lock left edge, recalculate width from mouse
+        width = Math.max(mouseX - x, MIN_DIM);
+        break;
+      }
+      case 'w': {
+        // Lock right edge, recalculate x/width from mouse
+        const right = x + width;
+        x = Math.min(mouseX, right - MIN_DIM);
+        width = right - x;
+        break;
+      }
+    }
 
     if (el.type === 'freehand') {
       const origBounds = getElementBounds(el);
@@ -1309,11 +1357,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const el = currentElements.find((e) => e.id === primaryId);
       if (!el) return;
 
-      const orig = resizeStartBounds.current;
-      const dx = point.x - (orig.x + (activeHandle.includes('e') ? orig.width : 0));
-      const dy = point.y - (orig.y + (activeHandle.includes('s') ? orig.height : 0));
-
-      const resized = applyResize(el, activeHandle, dx, dy);
+      const resized = applyResize(el, activeHandle, point.x, point.y);
       const newElements = currentElements.map((e) => (e.id === primaryId ? resized : e));
       moveElementsRef.current = newElements;
       onMoveElements(newElements);
