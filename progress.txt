@@ -128,3 +128,16 @@ Started: Tue Apr 15 2026
   - Inline styles in React cannot use !important; custom cursors that must persist during :active need a separate CSS class
   - The eraser overlay circle uses mousePos.current (a ref), so it only updates when React re-renders for other state changes — the CSS cursor is the primary visual feedback during continuous drag
 ---
+
+## [2026-04-15 22:00] - US-003
+- Refactored wheel handler in CanvasComponent to use viewport-center-based zoom instead of mouse-position-based zoom
+- Viewport center computed as canvas.width / 2, canvas.height / 2
+- World coordinates derived from viewport center, current pan, and current scale
+- After zoom change, scroll is recalculated: newPanX = viewportCenterX - worldX * newScale
+- App.tsx's setZoom already used viewport-center zoom with same formula via window.innerWidth/2, window.innerHeight/2
+- Typecheck passes
+- **Learnings for future iterations:**
+  - The viewport-center zoom formula is: `newPanX = viewportCenterX - ((viewportCenterX - oldPanX) / oldScale) * newScale`
+  - This can also be expressed as: `newPanX = viewportCenterX - (viewportCenterX - oldPanX) * scaleRatio` (algebraically equivalent)
+  - There are two zoom paths: wheel handler in CanvasComponent (ref-based, immediate) and setZoom in App.tsx (React state-based) — both must use the same formula
+---
