@@ -818,6 +818,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       }
     }
 
+    // Eraser ring: draw on canvas in screen coordinates (fixed size regardless of zoom)
+    if (activeTool === 'eraser') {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const screenX = mousePos.current.x * scaleRef.current + panXRef.current;
+      const screenY = mousePos.current.y * scaleRef.current + panYRef.current;
+      const ringRadius = eraserRadius * scaleRef.current;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, ringRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Marquee selection: draw semi-transparent blue rectangle
     if (interactionMode === 'selecting' && marqueeStart.current && marqueeEnd.current) {
       const mx = Math.min(marqueeStart.current.x, marqueeEnd.current.x);
@@ -886,7 +903,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     }
 
     ctx.restore();
-  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, getSelectedGroupIds, getGroupBBox, shapeOwners, userId, scale, themeMode, applyCanvasTransform, drawShape]);
+  }, [interactionMode, activeTool, selectedIds, scene, getBBox, getHandlePositions, getSelectedGroupIds, getGroupBBox, shapeOwners, userId, scale, themeMode, applyCanvasTransform, drawShape, eraserRadius]);
 
   // Master redraw
   const redrawCanvas = useCallback(() => {
@@ -1771,11 +1788,49 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       }
     }
 
+    // Eraser ring: draw on interactive canvas during idle pointer move
+    if (interactionMode === 'idle' && activeTool === 'eraser') {
+      const canvas = interactiveCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.save();
+          applyCanvasTransform(ctx);
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          const screenX = point.x * scaleRef.current + panXRef.current;
+          const screenY = point.y * scaleRef.current + panYRef.current;
+          const ringRadius = eraserRadius * scaleRef.current;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, ringRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.fill();
+          ctx.restore();
+          ctx.restore();
+        }
+      }
+      return;
+    }
+
     broadcastCursor(point.x, point.y, false);
   };
 
   const onPointerLeave = () => {
     if (interactionMode === 'panning') return;
+    // Clear eraser ring when mouse leaves canvas
+    if (activeTool === 'eraser') {
+      const canvas = interactiveCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+    }
     broadcastCursor(mousePos.current.x, mousePos.current.y, false);
   };
 
@@ -1941,7 +1996,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         : interactionMode === 'resizing'
           ? 'crosshair'
           : activeTool === 'eraser'
-            ? 'cell'
+            ? 'none'
             : activeTool === 'select' && spacePressed.current
               ? 'grab'
               : activeTool === 'select'
@@ -1968,7 +2023,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         <canvas
           ref={interactiveCanvasRef}
           id="canvas-interactive"
-          className={activeTool === 'eraser' ? 'eraser-cursor' : undefined}
           style={{
             position: 'absolute',
             top: 0,
@@ -2034,23 +2088,6 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
           </div>
         );
       })}
-      {/* Eraser cursor indicator */}
-      {activeTool === 'eraser' && (
-        <div
-          style={{
-            position: 'fixed',
-            left: mousePos.current.x * scale + panX - eraserRadius,
-            top: mousePos.current.y * scale + panY - eraserRadius,
-            width: eraserRadius * 2,
-            height: eraserRadius * 2,
-            borderRadius: '50%',
-            border: '2px solid rgba(0,0,0,0.5)',
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            pointerEvents: 'none',
-            zIndex: 1000,
-          }}
-        />
-      )}
       {editingText && (
         <textarea
           ref={textInputRef}
