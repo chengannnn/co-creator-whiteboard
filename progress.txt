@@ -82,3 +82,11 @@ Started: Tue Apr 15 2026
   - Released mouse commits resized shape via onMoveElements + pointerUp handler
 - Typecheck passes, 57 tests pass
 ---
+
+## [2026-04-15 11:05] - US-005 (supplemental)
+- Fixed missing real-time visual feedback during resize/move interactions
+- **Root cause:** During resize/move pointerMove, `onMoveElements()` updated the scene but neither `renderStaticScene()` nor `renderInteractive()` were called, so the canvas wasn't redrawn until pointerUp
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — added `renderStaticScene()` and `renderInteractive()` calls in both resizing and moving pointerMove handlers
+- Typecheck passes, 57 tests pass
+---
