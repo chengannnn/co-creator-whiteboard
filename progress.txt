@@ -37,3 +37,15 @@ Started: Tue Apr 15 2026
   - renderStaticScene and exportPng both use drawShape with CanvasRenderingContext2D
 - Typecheck passes, 57 tests pass
 ---
+
+## [2026-04-15 10:50] - US-003
+- Verified Interactive Canvas ghosting fix is already in place
+- **Verification:**
+  - onPointerMove: clears interactive canvas with clearRect before each draft redraw (lines 1224-1229)
+  - setDraft: calls renderInteractive() which starts with clearRect (line 631)
+  - onPointerUp: clears interactive canvas after commit (lines 1417-1423), sets draftRef.current = null
+  - Only Interactive Canvas is cleared, Static Canvas remains unaffected
+- Marked US-003 as passes: true in PRD
+- **Files changed:** `prd.json`
+- Typecheck passes
+---
