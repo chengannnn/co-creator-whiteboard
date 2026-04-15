@@ -116,3 +116,15 @@ Started: Tue Apr 15 2026
 - **Learnings for future iterations:**
   - Carried over from v2.1.3: the coordinate normalization fix was already in place
 ---
+
+## [2026-04-15 21:30] - US-002
+- Added e.preventDefault() in eraser tool's onPointerDown (CanvasComponent.tsx:1444) to suppress native text selection and drag-and-drop
+- Created eraser-cursor.css with custom cursor: url(data URI SVG eraser icon), auto !important — persists during :active state
+- Applied 'eraser-cursor' CSS class to interactive canvas when activeTool === 'eraser'
+- Existing eraser circle overlay (position: fixed DIV) already follows mousePos ref during drag
+- Imported eraser-cursor.css in main.tsx
+- Typecheck passes
+- **Learnings for future iterations:**
+  - Inline styles in React cannot use !important; custom cursors that must persist during :active need a separate CSS class
+  - The eraser overlay circle uses mousePos.current (a ref), so it only updates when React re-renders for other state changes — the CSS cursor is the primary visual feedback during continuous drag
+---
