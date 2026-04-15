@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
-import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement } from '../types/element';
+import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement, Arrowhead } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 import {
   createBBoxHandler,
@@ -479,44 +479,77 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         }
         ctx.stroke();
 
-        // Draw arrowhead(s)
-        // End arrowhead
-        if (element.endArrowhead === 'arrow') {
-          const last = pts[pts.length - 1];
-          const prev = pts[pts.length - 2];
-          const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+        // Draw arrowhead(s) using native Canvas 2D
+        const drawArrowhead = (
+          tipPt: Point,
+          refPt: Point,
+          headType: Arrowhead,
+        ) => {
+          const angle = Math.atan2(
+            tipPt.y - refPt.y,
+            tipPt.x - refPt.x,
+          );
           const headSize = element.strokeWidth * 3;
           ctx.save();
           ctx.setLineDash([]);
           ctx.fillStyle = strokeColor;
-          ctx.translate(last.x + element.x, last.y + element.y);
+          ctx.strokeStyle = strokeColor;
+          ctx.translate(tipPt.x + element.x, tipPt.y + element.y);
           ctx.rotate(angle);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(-headSize, -headSize / 2);
-          ctx.lineTo(-headSize, headSize / 2);
-          ctx.closePath();
-          ctx.fill();
+
+          switch (headType) {
+            case 'arrow': {
+              // Triangle pointing forward
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.lineTo(-headSize, -headSize / 2);
+              ctx.lineTo(-headSize, headSize / 2);
+              ctx.closePath();
+              ctx.fill();
+              break;
+            }
+            case 'bar': {
+              // Perpendicular bar across the endpoint
+              ctx.lineWidth = element.strokeWidth;
+              ctx.beginPath();
+              ctx.moveTo(0, -headSize / 2);
+              ctx.lineTo(0, headSize / 2);
+              ctx.stroke();
+              break;
+            }
+            case 'dot': {
+              // Filled circle at the endpoint
+              ctx.beginPath();
+              ctx.arc(0, 0, headSize / 2, 0, Math.PI * 2);
+              ctx.fill();
+              break;
+            }
+            case 'inverted_triangle': {
+              // Triangle pointing backward (away from direction)
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.lineTo(headSize, -headSize / 2);
+              ctx.lineTo(headSize, headSize / 2);
+              ctx.closePath();
+              ctx.fill();
+              break;
+            }
+          }
+
           ctx.restore();
+        };
+
+        // End arrowhead
+        if (element.endArrowhead) {
+          drawArrowhead(
+            pts[pts.length - 1],
+            pts[pts.length - 2],
+            element.endArrowhead,
+          );
         }
         // Start arrowhead
-        if (element.startArrowhead === 'arrow' && pts.length >= 2) {
-          const first = pts[0];
-          const next = pts[1];
-          const angle = Math.atan2(first.y - next.y, first.x - next.x);
-          const headSize = element.strokeWidth * 3;
-          ctx.save();
-          ctx.setLineDash([]);
-          ctx.fillStyle = strokeColor;
-          ctx.translate(first.x + element.x, first.y + element.y);
-          ctx.rotate(angle);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(-headSize, -headSize / 2);
-          ctx.lineTo(-headSize, headSize / 2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
+        if (element.startArrowhead && pts.length >= 2) {
+          drawArrowhead(pts[0], pts[1], element.startArrowhead);
         }
         break;
       }
@@ -1052,8 +1085,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       case 'w': x += dx; width -= dx; break;
     }
 
-    if (width < 10) { x -= 10 - width; width = 10; }
-    if (height < 10) { y -= 10 - height; height = 10; }
+    if (width < 1) { x -= 1 - width; width = 1; }
+    if (height < 1) { y -= 1 - height; height = 1; }
 
     if (el.type === 'freehand') {
       const origBounds = getElementBounds(el);
