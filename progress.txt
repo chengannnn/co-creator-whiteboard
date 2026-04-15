@@ -105,3 +105,14 @@ Started: Tue Apr 15 2026
   - The toolbar's group state machine relies on derived data (selectedElements) passed from App.tsx rather than direct scene access — keeps the toolbar stateless and React-friendly
   - The button is a single toggle that switches between Group and Ungroup semantics based on selection context, matching the acceptance criteria for a "single click" UX
 ---
+
+## [2026-04-15 21:00] - US-001
+- Verified and confirmed US-001 implementation on new v2.1.4 branch
+- Closed shape coordinate normalization in RectangleHandler.ts:35-38 uses `Math.min(el.x, worldX)` and `Math.abs()` — prevents shapes from disappearing when dragging in reverse direction
+- Line/Arrow direction preservation in LineHandler.ts:46-57 stores signed `dx`/`dy` in `points` array, absolute values in `width`/`height`
+- Freehand normalization in FreehandHandler.ts:42-54 recomputes bbox from points and shifts relative to min
+- Typecheck passes
+- No code changes needed — all acceptance criteria met
+- **Learnings for future iterations:**
+  - Carried over from v2.1.3: the coordinate normalization fix was already in place
+---
