@@ -509,6 +509,15 @@ function WhiteboardRoom() {
     canvasRef.current?.redo();
   }, []);
 
+  // Group/Ungroup via canvas ref
+  const handleGroup = useCallback(() => {
+    canvasRef.current?.groupSelectedElements();
+  }, []);
+
+  const handleUngroup = useCallback(() => {
+    canvasRef.current?.ungroupSelectedElements();
+  }, []);
+
   // Unified zoom control
   const setZoom = useCallback((newZoom: number) => {
     setScale((prev) => {
@@ -543,6 +552,9 @@ function WhiteboardRoom() {
         onThemeChange={setThemeMode}
         isRoundCornerEnabled={isRoundCornerEnabled}
         onRoundCornerToggle={handleRoundCornerToggle}
+        selectedElements={selectedIds.map((id) => sceneRef.current.getElement(id)).filter((el): el is SceneElement => el !== undefined)}
+        onGroup={handleGroup}
+        onUngroup={handleUngroup}
       />
       <CanvasComponent
         ref={canvasRef}

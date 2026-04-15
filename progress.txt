@@ -49,6 +49,35 @@ Started: Tue Apr 15 2026
   - Minimum marquee threshold of 3px prevents accidental clicks from triggering selection
 ---
 
+## Codebase Patterns
+- Closed shapes (rectangle, ellipse, rhombus) share `createBBoxHandler` factory in RectangleHandler.ts — all use `Math.min`/`Math.abs` for coordinate normalization
+- Vector shapes (line, arrow) preserve direction via `points` array with signed deltas; `width`/`height` store absolute values separately
+- Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
+- Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
+- Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
+- Group selection: clicking any element with `groupIds` expands selection to all elements sharing that groupId via `scene.getGroupElementIds()`
+- Group rendering uses union bounding box with single dashed border; resize handles disabled for group selections (CRITICAL: groups move-only in v2.1.3)
+- Render callbacks (`renderStaticScene`, `renderInteractive`) must be accessed via refs in `useImperativeHandle` since they're defined after it
+
+## [2026-04-15 19:45] - US-005
+- Implemented group and ungroup core logic
+- Scene.ts: Added `groupElements()` (generates crypto.randomUUID(), pushes to groupIds), `ungroupElements()` (removes specific groupId), and `getGroupElementIds()` (finds all elements sharing groupIds with a given element)
+- CanvasComponent.tsx: Group-aware selection — clicking grouped element auto-selects all group members via `scene.getGroupElementIds()`
+- CanvasComponent.tsx: Group rendering — draws single dashed border around union bounding box instead of individual borders; no resize handles for group selections
+- CanvasComponent.tsx: Disabled resize handle hit-testing when any selected element has groupIds (onPointerDown, hover cursor, wheel redraw, panning redraw)
+- CanvasComponent.tsx: Exposed `groupSelectedElements` and `ungroupSelectedElements` via canvas ref (uses ref-based render callback access to avoid forward-reference errors)
+- CanvasComponent.tsx: Added keyboard shortcuts — Ctrl+G/Cmd+G for group, Ctrl+Shift+G/Cmd+Shift+G for ungroup
+- Both group/ungroup push snapshot to history stack before mutation for undo/redo support
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - `useImperativeHandle` is defined before `renderStaticScene`/`renderInteractive` useCallbacks — must use refs to access them from exposed methods
+  - Group rendering must be updated in 4 places: renderInteractive, wheel handler, panning redraw, and any selection redraw — keep them in sync
+  - Elements can have multiple groupIds (nested groups supported at data level, though UI only handles single group for now)
+---
+
 ## [2026-04-15 19:15] - US-004
 - Verified SceneElement interface already has `groupIds: string[]` property in BaseElement (element.ts:39)
 - Verified createBaseElement already initializes `groupIds: []` (helpers.ts:44)
@@ -60,4 +89,19 @@ Started: Tue Apr 15 2026
   - The `shapeToElement` function is the ONLY place where groupIds could be lost during WebSocket sync — always check it when adding new element fields
   - Backend stores shapes as generic `Shape` with index signature, so any field added to SceneElement will pass through without backend changes
   - There are 4 places where elements are created: createBaseElement (tools), shapeToElement (WS sync), and two inline image element creations in App.tsx — all must be kept in sync for new fields
+---
+
+## [2026-04-15 20:30] - US-006
+- Implemented Group/Ungroup button in toolbar with state machine
+- UnifiedToolbar.tsx: Added GroupIcon SVG component (merged square with dots at four corners)
+- UnifiedToolbar.tsx: Added `areElementsInSameGroup` and `getSharedGroupId` helper functions for group state detection
+- UnifiedToolbar.tsx: Added groupAction derived state: 'group' when >= 2 elements not in same group, 'ungroup' when all selected elements share a groupId, null otherwise
+- UnifiedToolbar.tsx: Added Group/Ungroup button at rightmost position of Row 1 (after round corner button), disabled when groupAction is null (opacity 0.4, cursor not-allowed)
+- UnifiedToolbar.tsx: Button shows active border (2px solid btnActiveBorder) when in ungroup state, normal border when in group state
+- App.tsx: Added handleGroup and handleUngroup callbacks that delegate to canvasRef.current methods
+- App.tsx: Pass selectedElements (derived from selectedIds via sceneRef.current.getElement) and onGroup/onUngroup callbacks to UnifiedToolbar
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - The toolbar's group state machine relies on derived data (selectedElements) passed from App.tsx rather than direct scene access — keeps the toolbar stateless and React-friendly
+  - The button is a single toggle that switches between Group and Ungroup semantics based on selection context, matching the acceptance criteria for a "single click" UX
 ---
