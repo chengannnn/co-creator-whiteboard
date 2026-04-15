@@ -22,3 +22,18 @@ Started: Tue Apr 15 2026
   - Text and image cases in drawShape call `ctx.restore()` early since they need the original transform for positioning
   - The hatch fill style is no longer supported (was a roughjs feature) — if needed, implement with native canvas patterns
 ---
+
+## [2026-04-15 10:45] - US-002
+- Verified drawShape function uses native Canvas 2D APIs for all shape types
+- Marked US-002 as passes: true in PRD
+- **Files changed:**
+  - `prd.json` — updated US-002 passes flag
+- **Verification:**
+  - Rectangles: ctx.fillRect/ctx.strokeRect with borderRadius support
+  - Rhombuses: ctx.beginPath/moveTo/lineTo/closePath
+  - Lines/Freehand: ctx.beginPath/moveTo/lineTo
+  - Arrows: standard paths + filled triangle arrowheads (start + end)
+  - Style properties: strokeColor, fillColor, strokeWidth, strokeStyle, opacity all apply correctly
+  - renderStaticScene and exportPng both use drawShape with CanvasRenderingContext2D
+- Typecheck passes, 57 tests pass
+---
