@@ -1,19 +1,18 @@
 {
-  "project": "Whiteboard v2.1.1",
-  "branchName": "feature/whiteboard-v2.1.1",
-  "description": "修复交互层遗留 Bug（快照残留、负坐标绘制失效），重构橡皮擦为对象级擦除，优化工具栏 SVG 图标，新增圆角按钮（全局预设 + 属性修改器双重行为）。",
+  "project": "Whiteboard v2.1.2",
+  "branchName": "feature/whiteboard-v2.1-refactor",
+  "description": "渲染层降级与核心交互修复：移除 Rough.js 依赖，统一使用原生 Canvas 2D 渲染，修复交互层拖尾残影、向左/向上拖拽绘制失效、选中图形拉伸不稳定等致命缺陷。",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix pointermove draft snapshot ghost trails",
-      "description": "As a user, I want the Interactive canvas to show only the current frame's draft shape while drawing, so I don't see ghost trails of previous frames.",
+      "title": "Remove Rough.js dependency and roughness-related data properties",
+      "description": "As a developer, I want to remove the Rough.js library and all roughness-related properties so that the project has fewer dependencies and a smaller bundle size.",
       "acceptanceCriteria": [
-        "PointerEventProcessor pointermove handler clears Interactive Canvas with clearRect(0, 0, canvas.width, canvas.height) before each draft redraw",
-        "pointerup handler clears Interactive Canvas and sets currentDraft to null after committing the shape",
-        "Dragging to draw shows only one live draft shape, no overlapping ghost trails",
-        "After mouse release, draft disappears completely, only the committed shape remains on Static Canvas",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Remove `roughjs` from package.json dependencies and node_modules",
+        "Remove `roughness` and `seed` properties from SceneElement interface and all related type definitions",
+        "Remove all `roughjs` import statements from the codebase",
+        "Clean up all code paths that referenced roughness/seed properties",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
@@ -21,109 +20,70 @@
     },
     {
       "id": "US-002",
-      "title": "Fix negative coordinate drag drawing failure",
-      "description": "As a user, I want to draw shapes by dragging in any direction (including left/up), so my drawing workflow feels natural.",
+      "title": "Rewrite drawElement function to use native Canvas 2D APIs",
+      "description": "As a developer, I want to rewrite the drawElement rendering function to use native Canvas 2D APIs so that all shapes render as clean, standard vector geometry.",
       "acceptanceCriteria": [
-        "RectangleHandler uses Math.abs for width/height and Math.min for x/y start coordinates",
-        "EllipseHandler uses the same absolute-value logic for bounding box",
-        "RhombusHandler uses the same absolute-value logic for 4 vertex calculation",
-        "Coordinate normalization logic encapsulated in a shared helper function or within each handler",
-        "Dragging in all 4 diagonal directions (NW, NE, SW, SE) produces correctly positioned and sized shapes",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Rectangles rendered using ctx.strokeRect() and ctx.fillRect()",
+        "Rhombuses rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo() + ctx.closePath()",
+        "Lines rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo()",
+        "Arrows rendered with standard paths plus arrowhead triangle, no hand-drawn jitter",
+        "All shape types render correctly on both Static and Interactive Canvas layers",
+        "Shape style properties (strokeColor, fillColor, strokeWidth) still apply correctly",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Implement object-level eraser with hit testing",
-      "description": "As a user, I want to erase shapes by touching them with the eraser cursor, so I can quickly remove unwanted elements one by one or in batches.",
+      "title": "Fix Interactive Canvas ghosting/trail artifacts during drawing",
+      "description": "As a user, I want the drawing canvas to not leave ghosting trails when I drag to create shapes, so that my workspace stays clean and responsive.",
       "acceptanceCriteria": [
-        "Add core/hitTesting.ts helper with pointInBoundingBox(px, py, element) function",
-        "EraserHandler pointermove traverses all non-deleted Scene elements and checks hit against each",
-        "Hit elements are visually highlighted on Interactive Canvas with red dashed border",
-        "pointerup sets isDeleted to true for all hit elements",
-        "Exactly one history snapshot is pushed for the entire eraser stroke",
-        "Static Canvas redraws after deletion",
-        "Eraser draft state is cleared after pointerup",
+        "Interactive Canvas cleared with ctx.clearRect(0, 0, canvas.width, canvas.height) before each draft redraw in pointermove handler",
+        "clearRect only affects Interactive Canvas, Static Canvas and its committed shapes are unaffected",
+        "Dragging to draw shows only one live draft shape, no overlapping ghost trails",
+        "After pointerup, draft disappears completely, only committed shape remains on Static Canvas",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Update toolbar SVG icons for selection and eraser tools",
-      "description": "As a user, I want standard SVG icons for the selection and eraser tools, so the toolbar looks professional and familiar.",
+      "title": "Fix left/up direction drag drawing failure",
+      "description": "As a user, I want to draw shapes by dragging the mouse in any direction (left, up, right, down), so that the drawing experience feels natural.",
       "acceptanceCriteria": [
-        "Selection tool button uses standard cursor/pointer SVG icon",
-        "Selection tool button positioned immediately to the right of lock toggle, with vertical divider separating it from drawing tools",
-        "Eraser tool button uses standard eraser SVG icon (tilted, classic shape)",
-        "Icons render correctly in both light and dark themes",
+        "Dragging left from start point renders rectangle/rhombus correctly",
+        "Dragging up from start point renders rectangle/rhombus correctly",
+        "Dragging in all diagonal directions (top-left, bottom-left, top-right, bottom-right) renders correctly",
+        "Coordinate calculation uses Math.min(startX, currentX) for x/y and Math.abs(currentX - startX) for width/height",
+        "Committed shape position and dimensions on Static Canvas match actual mouse drag trajectory",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add round corner button with state machine",
-      "description": "As a user, I want a corner-rounding toggle button that intelligently enables/disables based on the active tool, so I can draw rounded rectangles and diamonds.",
+      "title": "Fix unstable resize behavior on selected shapes",
+      "description": "As a user, I want to reliably resize a selected shape by dragging its handles, so that I can precisely adjust shape dimensions.",
       "acceptanceCriteria": [
-        "Add Round Corner button at rightmost position of toolbar first row",
-        "Disabled state (semi-transparent/gray) when active tool is not rectangle, rectangle-solid, rhombus, or rhombus-solid",
-        "Enabled state (normal appearance) when active tool is rectangle, rectangle-solid, rhombus, or rhombus-solid",
-        "Toggled on state (highlighted/pressed) when user clicks enabled button",
-        "Button state updates reactively when activeTool changes",
-        "AppState adds isRoundCornerEnabled boolean field (default false)",
-        "ToolType includes rectangle, rectangle-solid, rhombus, rhombus-solid as distinct values (verify existing, add if missing)",
+        "Selected shape displays standard resize handles (nw, ne, sw, se, n, s, e, w) positioned on exact mathematical bounding box",
+        "Dragging corner handles (nw, ne, sw, se) correctly updates shape x, y, width, height based on mouse delta",
+        "Dragging edge midpoint handles (n, s, e, w) correctly adjusts dimension in corresponding direction",
+        "Shape bounding box tracks mouse cursor position during drag, no jumping or misalignment",
+        "Shape width and height constrained to minimum 1 pixel to prevent axis-crossing flip issues",
+        "Released mouse commits resized shape to Static Canvas",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-006",
-      "title": "Round corner global preset for newly drawn shapes",
-      "description": "As a user, I want the round corner toggle to act as a global preset for newly drawn shapes, so all my subsequent rectangles/diamonds have rounded corners.",
-      "acceptanceCriteria": [
-        "When isRoundCornerEnabled is true, newly drawn RectangleElement and RhombusElement get borderRadius set to 12 (fixed preset)",
-        "When isRoundCornerEnabled is false, newly drawn shapes get borderRadius set to 0",
-        "Applies to all 4 shape types: rectangle, rectangle-solid, rhombus, rhombus-solid",
-        "borderRadius is stored in SceneElement and persists across redraws",
-        "Static Canvas renders rounded corners using roughjs borderRadius option on rc.rectangle() and rc.polygon() or rc.path()",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-007",
-      "title": "Round corner as attribute modifier for selected shapes",
-      "description": "As a user, I want to apply round corners to already-selected shapes with a single click on the round corner button, so I can toggle rounding on existing elements.",
-      "acceptanceCriteria": [
-        "When round corner button is clicked, check selectedElementIds for currently selected shapes",
-        "If selected shapes include RectangleElement or RhombusElement, update their borderRadius to 12 (toggled on) or 0 (toggled off)",
-        "Auto-filter: only rectangle and rhombus types receive the borderRadius change, other types skipped",
-        "Multi-select supported: multiple eligible shapes all receive the borderRadius update",
-        "Update triggers Scene.updateElement() for each modified element with version increment",
-        "Push one history snapshot for the batch update",
-        "Trigger Static Canvas redraw",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]
