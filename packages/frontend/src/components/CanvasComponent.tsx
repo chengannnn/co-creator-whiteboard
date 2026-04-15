@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHand
 import { Scene } from '../core/Scene';
 import { HistoryManager } from '../core/HistoryManager';
 import { findElementsInRect } from '../core/hitTesting';
+import { bringToFront, sendToBack, bringForward, sendBackward } from '../core/layerUtils';
 import type { SceneElement, DraftElement, StrokeWidth, ToolHandler as ToolHandlerType, Point, RectangleElement, RhombusElement, Arrowhead } from '../types/element';
 import { getThemeColors, getStrokeColor, type ThemeMode } from '../theme';
 import {
@@ -44,6 +45,10 @@ export interface CanvasComponentRef {
   redo: () => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
+  bringToFront: () => void;
+  sendToBack: () => void;
+  bringForward: () => void;
+  sendBackward: () => void;
 }
 
 interface CanvasComponentProps {
@@ -410,6 +415,46 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       if (!sharedGroupId) return;
       history.push();
       scene.ungroupElements(selectedIds, sharedGroupId);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
+    bringToFront: () => {
+      if (selectedIds.length !== 1) return;
+      const elements = scene.getElements();
+      bringToFront(elements, selectedIds[0]);
+      history.push();
+      scene.replaceAll(elements);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
+    sendToBack: () => {
+      if (selectedIds.length !== 1) return;
+      const elements = scene.getElements();
+      sendToBack(elements, selectedIds[0]);
+      history.push();
+      scene.replaceAll(elements);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
+    bringForward: () => {
+      if (selectedIds.length !== 1) return;
+      const elements = scene.getElements();
+      bringForward(elements, selectedIds[0]);
+      history.push();
+      scene.replaceAll(elements);
+      onSceneMutate('update');
+      renderStaticSceneRef.current?.();
+      renderInteractiveRef.current?.();
+    },
+    sendBackward: () => {
+      if (selectedIds.length !== 1) return;
+      const elements = scene.getElements();
+      sendBackward(elements, selectedIds[0]);
+      history.push();
+      scene.replaceAll(elements);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
       renderInteractiveRef.current?.();
