@@ -29,3 +29,19 @@ Branch: feature/whiteboard-v2.1.6
   - Icon height consistency is determined by the SVG element's y-coordinates within the 0 0 24 24 viewBox
   - Typecheck command: `npm run typecheck`
 ---
+## [2026-04-16] - US-003
+- Implemented Sharp Corner button with mutual-exclusion state
+- Added SharpCornerIcon SVG (sharp-cornered rectangle) in UnifiedToolbar.tsx
+- Added Sharp Corner button immediately to the left of Round Corner button
+- Sharp Corner has same enabled/disabled condition as Round Corner (rectangle/rectangle-solid/rhombus/rhombus-solid tools only)
+- Mutual exclusion: Sharp Corner shows active when !isRoundCornerEnabled for eligible tools
+- Clicking Sharp Corner calls handleRoundCornerToggle which sets isRoundCornerEnabled to false and applies borderRadius=0 to eligible selected elements
+- isSharpCornerEnabled derived in App.tsx from !isRoundCornerEnabled for eligible tools
+- Files changed:
+  - `packages/frontend/src/components/UnifiedToolbar.tsx` (SharpCornerIcon, new button, new props)
+  - `packages/frontend/src/App.tsx` (isSharpCornerEnabled derivation, new props passed)
+- **Learnings for future iterations:**
+  - handleRoundCornerToggle is reused for both Sharp and Round corner toggles since they share the same underlying logic (toggling isRoundCornerEnabled)
+  - The existing round corner rendering in CanvasComponent.tsx uses `borderRadius: isRoundCapable && isRoundCornerEnabled ? 12 : 0` which already handles sharp corners when isRoundCornerEnabled is false
+  - Typecheck command: `npm run typecheck`
+---
