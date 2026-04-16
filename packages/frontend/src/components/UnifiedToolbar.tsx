@@ -65,6 +65,13 @@ const SendBackwardIcon = () => (
   </svg>
 );
 
+/** SVG icon for Sharp Corner — rectangle with sharp 90-degree corners. */
+const SharpCornerIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="5" width="14" height="14" />
+  </svg>
+);
+
 const UNIFIED_COLORS = [
   '#000000', // black
   '#e03131', // red
@@ -142,6 +149,8 @@ interface UnifiedToolbarProps {
   onThemeChange: (mode: ThemeMode) => void;
   isRoundCornerEnabled: boolean;
   onRoundCornerToggle: () => void;
+  isSharpCornerEnabled: boolean;
+  onSharpCornerToggle: () => void;
   selectedElements: SceneElement[];
   onGroup: () => void;
   onUngroup: () => void;
@@ -171,6 +180,8 @@ export default function UnifiedToolbar({
   onThemeChange,
   isRoundCornerEnabled,
   onRoundCornerToggle,
+  isSharpCornerEnabled,
+  onSharpCornerToggle,
   selectedElements,
   onGroup,
   onUngroup,
@@ -449,6 +460,46 @@ export default function UnifiedToolbar({
           }}
         >
           🖼
+        </button>
+
+        {/* Sharp Corner button — immediately to the left of Round Corner */}
+        <button
+          title="Sharp Corner"
+          disabled={!canRoundCorner}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canRoundCorner) {
+              onSharpCornerToggle();
+            }
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: canRoundCorner && isSharpCornerEnabled
+              ? `2px solid ${theme.btnActiveBorder}`
+              : '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: canRoundCorner && isSharpCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: canRoundCorner ? 'pointer' : 'not-allowed',
+            color: canRoundCorner ? theme.textPrimary : theme.textMuted,
+            opacity: canRoundCorner ? 1 : 0.4,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (canRoundCorner && !isSharpCornerEnabled) {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = canRoundCorner && isSharpCornerEnabled
+              ? theme.btnActiveBg
+              : theme.btnDefaultBg;
+          }}
+        >
+          <SharpCornerIcon />
         </button>
 
         {/* Round Corner button — rightmost of row 1 */}

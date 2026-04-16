@@ -572,6 +572,12 @@ function WhiteboardRoom() {
         onThemeChange={setThemeMode}
         isRoundCornerEnabled={isRoundCornerEnabled}
         onRoundCornerToggle={handleRoundCornerToggle}
+        isSharpCornerEnabled={
+          (activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid')
+            ? !isRoundCornerEnabled
+            : false
+        }
+        onSharpCornerToggle={handleRoundCornerToggle}
         selectedElements={selectedIds.map((id) => sceneRef.current.getElement(id)).filter((el): el is SceneElement => el !== undefined)}
         onGroup={handleGroup}
         onUngroup={handleUngroup}
