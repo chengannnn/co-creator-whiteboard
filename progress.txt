@@ -16,3 +16,16 @@ Branch: feature/whiteboard-v2.1.6
   - Wheel handler is inside a `useEffect` with many dependencies — avoid changing the dependency list unless necessary
   - Typecheck command: `npm run typecheck` (runs tsc on both backend and frontend)
 ---
+## [2026-04-16] - US-002
+- Implemented aligned layer management icon heights
+- BringForwardIcon: extended arrow shaft from y=11→y=19 to y=5→y=19, moved arrowhead from y=15 to y=9
+- SendBackwardIcon: extended arrow shaft from y=5→y=13 to y=5→y=19, moved arrowhead from y=9 to y=15
+- All 4 layer icons now span y=5 to y=19 (14px SVG bounding box)
+- Arrow head positions mirror their "to end" counterparts proportionally
+- Files changed:
+  - `packages/frontend/src/components/UnifiedToolbar.tsx` (BringForwardIcon, SendBackwardIcon)
+- **Learnings for future iterations:**
+  - Layer icons are inline SVGs defined directly in UnifiedToolbar.tsx (lines 35-66), not separate files
+  - Icon height consistency is determined by the SVG element's y-coordinates within the 0 0 24 24 viewBox
+  - Typecheck command: `npm run typecheck`
+---
