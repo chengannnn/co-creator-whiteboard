@@ -1,7 +1,7 @@
 # Whiteboard Architecture (AI-Friendly)
 
 > **Target audience**: AI coding assistants (Claude, Copilot, etc.) picking up this project.
-> **Last updated**: 2026-04-17
+> **Last updated**: 2026-04-17 (v2.1.9 — logical delete, undo upsert, redraw fix)
 > **Branch**: `feature/whiteboard-v2.1.8`
 
 ---
@@ -126,7 +126,7 @@ SceneElement (union type)
 - **Z-order**: determined by `index` field. Array position in `getElements()` result = render order.
 - `deleteElement()` → sets `isDeleted: true`, does **NOT** remove from Map.
 - `replaceAll()` → clears Map, re-inserts all elements.
-- `snapshot()` → deep clone via `structuredClone`.
+- `snapshot()` → deep clone via `structuredClone` — includes logically deleted elements (unlike `getElements()`).
 - `groupElements()` / `ungroupElements()` → shared `groupIds` array.
 
 ### 4. Canvas Render Engine & Layers
@@ -171,7 +171,7 @@ PointerMove
 
 PointerUp
   ├── drawing  → handler.onPointerUp → commitElement() or discard
-  ├── eraser   → finish() → set isDeleted=true on hits → onSceneMutate
+  ├── eraser   → finish() → set isDeleted=true on hits → onSceneMutate('delete') → redrawCanvas()
   ├── move/resize → history.push(), update all → onSceneMutate('update')
   ├── panning  → commit pan to React state
   └── selecting → findElementsInRect → setSelectedIds
@@ -209,6 +209,15 @@ Factory functions in `core/tools/`:
 | `shape_delete` | C→S / S→C | `{ shapeId }` | Element delete broadcast |
 | `cursor_position` | C→S / S→C | `{ userId, x, y, color, name, isDrawing }` | Live cursor relay |
 | `cursor_leave` | S→C | `{ userId }` | Remove remote cursor |
+
+**Key detail**: `shape_delete` uses **logical deletion** — backend sets `isDeleted: true` via `findIndex`, never `filter()`. This preserves undo history.
+
+**Data format split**:
+
+- **`sync_state`** → server sends **legacy Shape format** (nested `style` object, `startX/startY/endX/endY`). Client converts via `shapeToElement()` once on initial sync.
+- **Incremental mutations** (`shape_create`, `shape_update`, `shape_delete`) → client sends and receives **new SceneElement format** (flat `strokeColor`/`strokeWidth`/`strokeStyle`/`fillStyle`/`fillColor`, no nested `style`). The `shape_create` / `shape_update` payload key is `shape` (not `element`), and `shape_delete` uses `shapeId` (not `elementId`).
+- **No double-conversion**: incremental mutation receivers use `msg.shape` directly as `SceneElement`. The `shapeToElement()` function has a defensive guard — if the input already has `version` + `strokeColor` + no `style` (i.e., it's already a SceneElement), it returns it unchanged. This protects against page-refresh re-syncs delivering new-format data through the legacy converter.
+- **Force redraw on `shape_update`**: after `scene.updateElement()` in the `shape_update` receiver, `canvasRef.current?.redraw()` is called to force the canvas to repaint. Since `Scene.updateElement` mutates in-place (useRef, not useState), no React re-render is triggered without this explicit call.
 
 **Key detail**: Server stores shapes in legacy `Shape` format (`{ id, type, x, y, width, height, startX, endX, ... }`). Client converts via `shapeToElement()` on `sync_state`, but sends/receives `SceneElement` format on incremental mutations.
 
@@ -274,7 +283,7 @@ World → Screen:  screenX = worldX * zoom + scrollX
 - **Grouping**: Assign a new `crypto.randomUUID()` to the `groupIds` array of all selected elements. **Do not** change their `index` (Z-order). See `Scene.ts:groupElements()`.
 - **Ungrouping**: Remove **ONLY** the top-level shared `groupId` via `groupIds.filter(g => g !== groupId)`. Preserve any nested `groupIds` and **strictly preserve** the `index` (Z-order) of every element. See `Scene.ts:ungroupElements()`.
 - Ungrouping must be allowed even if only **1 orphaned element** is selected, as long as it carries a valid `groupId`.
-- **Implementation**: `Scene.groupElements()` / `Scene.ungroupElements()` handle the data layer; `CanvasComponent.tsx` `useImperativeHandle` exposes the UI-facing methods.
+- **Implementation**: `Scene.groupElements()` / `Scene.ungroupElements()` handle the data layer; `CanvasComponent.tsx` `useImperativeHandle` exposes the UI-facing methods plus `redraw()` (calls `redrawAllRef.current?.()` — repaints all 3 canvas layers).
 
 ### Rule 6: UI Modifier State Machine (e.g., Sharp/Round Corners)
 
@@ -289,6 +298,19 @@ Toolbar attribute modifiers (Corners, Colors, Styles) must support a **Dual-Beha
 - **Never** use Unicode characters (e.g., `○`, `◇`, `▭`, `✎`) or standard text fonts for toolbar icons. They render inconsistently across OS font stacks and break exact bounding-box alignment.
 - **All** toolbar icons must be pure `<svg>` components with explicit `viewBox` and `<path>` definitions.
 - **Implementation**: v2.1.8 replaced all Unicode tool icons with inline SVG components in `UnifiedToolbar.tsx`. Any new tool button added to the toolbar must follow this pattern.
+
+### Rule 8: Logical Delete — Never Physically Remove Elements
+
+- **Backend**: `shape_delete` in `packages/backend/src/index.ts` must mark `isDeleted: true` on the matching shape. **Never** `filter()` or `splice()` shapes from the `roomShapes` Map. This ensures Undo can restore elements.
+- **Backend upsert**: `shape_update` must add the shape via `push()` if `findIndex` returns `-1`. This is critical for Undo restoring elements that the backend no longer has a record of.
+- **Frontend**: `Scene.deleteElement()` sets `isDeleted: true`. `Scene.getElements()` filters out deleted elements but they remain in the internal Map.
+- **Eraser**: Calls `onSceneMutate('delete')` (not `'update'`) after setting `isDeleted: true` on hit elements, so the correct WebSocket broadcast path fires.
+
+### Rule 9: Snapshot for ReplaceAll Sync
+
+- In `onSceneMutate` with `action === 'replaceAll'` (Undo/Redo), use `scene.snapshot()` — which returns **all** elements including logically deleted ones — as the broadcast data source, not `scene.getElements()`. This ensures that undoing an erasure or re-deleting restored shapes syncs correctly across devices.
+- `shapeToElement` preserves `isDeleted` via `shape.isDeleted ?? false` in the `commonBase` object.
+- `shape_update` receiver on the frontend calls `canvasRef.current?.redraw()` to force canvas refresh, since `scene.updateElement` mutates in-place without triggering React re-render.
 
 ---
 
@@ -307,6 +329,14 @@ User interaction
           → history.push()
           → onSceneMutate() → WebSocket broadcast
           → renderStaticScene() + renderInteractive()
+
+Remote mutation (WebSocket)
+  → ws.onmessage dispatches:
+        ├── shape_create  → scene.addElement() + setShapeOwners
+        ├── shape_update  → scene.updateElement() + canvasRef.redraw() (force repaint)
+        ├── shape_delete  → scene.deleteElement() + clear selection/ownership
+        └── sync_state    → scene.replaceAll(shapes.map(shapeToElement)) + history.clear()
+          → (no explicit redraw needed — React state change triggers re-render)
 ```
 
 ---
@@ -315,6 +345,31 @@ User interaction
 
 1. Client connects via WebSocket → assigned random color + animal name.
 2. Client sends `join_room` → server adds to room Set, sends `sync_state` (all shapes).
-3. Room auto-cleans after **5 minutes** of inactivity (no connected clients).
-4. Shape mutations (`shape_create/update/delete`) are persisted in `roomShapes` Map and broadcast to all other clients in the room.
-5. Server is stateless between restarts — no database.
+3. Room shape state is stored server-side in `roomShapes` Map (`roomId → Shape[]`).
+4. **Grace period cleanup**: When a room becomes empty (0 clients), its shape data is **NOT** immediately deleted. Instead, `scheduleRoomCleanup(roomId)` starts a **5-minute countdown timer**. Only after this timer fires are the shapes purged from `roomShapes`. This allows users to reconnect within 5 minutes and recover their canvas state.
+5. **Cursor cleanup on room switch**: When a user switches from room A to room B via `join_room`, the server first calls `broadcastCursorLeave(roomA, ws)` to remove the stale cursor from room A's other participants. This prevents cursor ghosting.
+6. **Cursor cleanup on disconnect**: When a WebSocket closes, the server calls `broadcastCursorLeave(currentRoom, ws)` before removing the client from the room Set.
+7. Shape mutations (`shape_create/update/delete`) are persisted in `roomShapes` Map and broadcast to all other clients in the room.
+   - `shape_create` → `shapes.push(msg.shape)`.
+   - `shape_update` → `findIndex` by ID; if found, replace; if **not found**, `push()` (upsert — supports Undo restoring elements the backend doesn't have).
+   - `shape_delete` → `findIndex` by ID; sets `isDeleted: true` on the shape. **Never** `filter()` / physical removal.
+8. Server is stateless between restarts — no database.
+
+### Cleanup Flow
+
+```
+Room becomes empty (clients.size === 0)
+  → scheduleRoomCleanup(roomId)  // starts 5-min timer
+  → rooms.delete(roomId)         // room entry removed immediately
+  → roomShapes KEPT               // shapes preserved during grace period
+  → [5 minutes elapse]
+  → cleanup timer fires
+  → roomShapes.delete(roomId)    // shapes finally purged
+  → rooms already gone
+```
+
+### Key Safety Rules
+
+- **NEVER** call `roomShapes.delete(roomId)` synchronously when a room becomes empty. Always route through `scheduleRoomCleanup`.
+- **ALWAYS** call `broadcastCursorLeave(roomId, ws)` before removing a client from a room (both on disconnect and on room switch).
+- **NEVER** physically delete shapes from `roomShapes` via `filter()` or `splice()`. Use `findIndex` + set `isDeleted: true` for deletion; use upsert (`push` when not found) for `shape_update`.

@@ -163,6 +163,9 @@ wss.on('connection', (ws, req) => {
         if (currentRoom) {
           const prevClients = rooms.get(currentRoom);
           if (prevClients) {
+            // 离开旧房间前，先广播清理光标
+            broadcastCursorLeave(currentRoom, ws);
+
             prevClients.delete(ws);
             if (prevClients.size === 0) {
               rooms.delete(currentRoom);
@@ -215,16 +218,21 @@ wss.on('connection', (ws, req) => {
         const idx = shapes.findIndex((s: Shape) => s.id === msg.shape.id);
         if (idx !== -1) {
           shapes[idx] = msg.shape;
-          roomShapes.set(currentRoom, shapes);
-          broadcastToRoom(currentRoom, msg, ws);
+        } else {
+          // Upsert: shape not found → add it (critical for Undo restoring elements)
+          shapes.push(msg.shape);
         }
+        roomShapes.set(currentRoom, shapes);
+        broadcastToRoom(currentRoom, msg, ws);
       }
 
       if (currentRoom && msg.type === 'shape_delete') {
         const shapes = roomShapes.get(currentRoom) ?? [];
-        const filtered = shapes.filter((s: Shape) => s.id !== msg.shapeId);
-        if (filtered.length !== shapes.length) {
-          roomShapes.set(currentRoom, filtered);
+        const idx = shapes.findIndex((s: Shape) => s.id === msg.shapeId);
+        if (idx !== -1) {
+          // Logical delete: mark isDeleted = true instead of physical removal
+          shapes[idx] = { ...shapes[idx], isDeleted: true };
+          roomShapes.set(currentRoom, shapes);
           broadcastToRoom(currentRoom, msg, ws);
         }
       }
@@ -261,7 +269,6 @@ wss.on('connection', (ws, req) => {
         clients.delete(ws);
         if (clients.size === 0) {
           rooms.delete(currentRoom);
-          roomShapes.delete(currentRoom);
           scheduleRoomCleanup(currentRoom);
         } else {
           broadcastUserCount(currentRoom);

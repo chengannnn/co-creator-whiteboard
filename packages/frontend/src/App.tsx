@@ -111,7 +111,7 @@ function WhiteboardRoom() {
   }, [userColor]);
 
   // Send scene mutation over WebSocket
-  const sendSceneMutation = useCallback((type: string, data: { element?: SceneElement; elementId?: string; userId?: string }) => {
+  const sendSceneMutation = useCallback((type: string, data: { shape?: SceneElement; shapeId?: string; userId?: string }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type, ...data }));
     }
@@ -159,17 +159,18 @@ function WhiteboardRoom() {
             setRemoteCursors(new Map());
           } else if (msg.type === 'shape_create' && msg.shape) {
             const scene = sceneRef.current;
-            const el = shapeToElement(msg.shape);
-            scene.addElement(el);
+            // msg.shape is already a SceneElement from the sender
+            scene.addElement(msg.shape as SceneElement);
             setShapeOwners((prev) => {
               const next = new Map(prev);
-              next.set(el.id, msg.userId ?? '__unknown__');
+              next.set(msg.shape.id, msg.userId ?? '__unknown__');
               return next;
             });
           } else if (msg.type === 'shape_update' && msg.shape) {
             const scene = sceneRef.current;
-            const el = shapeToElement(msg.shape);
-            scene.updateElement(el.id, el as Partial<SceneElement>);
+            // msg.shape is already a SceneElement from the sender
+            scene.updateElement(msg.shape.id, msg.shape as Partial<SceneElement>);
+            canvasRef.current?.redraw();
           } else if (msg.type === 'shape_delete' && msg.shapeId) {
             const scene = sceneRef.current;
             scene.deleteElement(msg.shapeId);
@@ -244,7 +245,7 @@ function WhiteboardRoom() {
       historyRef.current.push();
       const lastEl = elements[elements.length - 1];
       if (lastEl) {
-        sendSceneMutation('shape_create', { element: lastEl, userId: userIdRef.current ?? '__local__' });
+        sendSceneMutation('shape_create', { shape: lastEl, userId: userIdRef.current ?? '__local__' });
         setShapeOwners((prev) => {
           const next = new Map(prev);
           next.set(lastEl.id, userIdRef.current ?? '__local__');
@@ -255,14 +256,14 @@ function WhiteboardRoom() {
       historyRef.current.push();
       // Broadcast all updated elements
       for (const el of elements) {
-        sendSceneMutation('shape_update', { element: el });
+        sendSceneMutation('shape_update', { shape: el });
       }
     } else if (action === 'delete') {
       historyRef.current.push();
       // Broadcast deleted elements
       const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
       for (const el of deletedElements) {
-        sendSceneMutation('shape_delete', { elementId: el.id });
+        sendSceneMutation('shape_delete', { shapeId: el.id });
         setShapeOwners((prev) => {
           const next = new Map(prev);
           next.delete(el.id);
@@ -271,17 +272,17 @@ function WhiteboardRoom() {
       }
     } else if (action === 'replaceAll') {
       // undo/redo — no history push (already handled by HistoryManager)
-      // Broadcast full diff: check which elements were added/removed/modified
-      // For simplicity, broadcast all elements as updates
-      for (const el of elements) {
-        sendSceneMutation('shape_update', { element: el });
+      // Use snapshot() to include elements with isDeleted=true (restored or re-deleted)
+      const allElements = scene.snapshot();
+      for (const el of allElements) {
+        sendSceneMutation('shape_update', { shape: el });
       }
     } else if (action === 'clear') {
       historyRef.current.push();
       // Broadcast all deletions
       const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
       for (const el of deletedElements) {
-        sendSceneMutation('shape_delete', { elementId: el.id });
+        sendSceneMutation('shape_delete', { shapeId: el.id });
         setShapeOwners((prev) => {
           const next = new Map(prev);
           next.delete(el.id);
@@ -679,7 +680,20 @@ function shapeToElement(shape: {
   };
   ownerId?: string;
   groupIds?: string[];
+  // When a SceneElement is passed through (from incremental sync), it will have these
+  version?: number;
+  strokeColor?: string;
+  strokeWidth?: number;
+  strokeStyle?: string;
+  fillStyle?: string;
+  fillColor?: string;
+  isDeleted?: boolean;
 }): SceneElement {
+  // 防御：如果传入的已经是新版的 SceneElement（含有 version 和展平的 style 属性），直接返回
+  if ('version' in shape && 'strokeColor' in shape && !('style' in shape)) {
+    return shape as unknown as SceneElement;
+  }
+
   const style = shape.style ?? DEFAULT_STYLE;
   const now = Date.now();
 
@@ -694,7 +708,7 @@ function shapeToElement(shape: {
     opacity: 1,
     version: 1,
     versionNonce: Math.floor(Math.random() * 1e9),
-    isDeleted: false,
+    isDeleted: shape.isDeleted ?? false,
     groupIds: shape.groupIds ?? [],
     index: 0,
     updated: now,

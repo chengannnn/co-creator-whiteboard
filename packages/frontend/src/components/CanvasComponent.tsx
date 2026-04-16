@@ -50,6 +50,7 @@ export interface CanvasComponentRef {
   sendToBack: () => void;
   bringForward: () => void;
   sendBackward: () => void;
+  redraw: () => void;
 }
 
 interface CanvasComponentProps {
@@ -460,6 +461,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
       renderInteractiveRef.current?.();
+    },
+    redraw: () => {
+      redrawAllRef.current?.();
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [scene, userId, shapeOwners, themeMode, undo, redo, selectedIds, history, onSceneMutate]);
@@ -1856,7 +1860,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
               scene.updateElement(id, { isDeleted: true });
             }
           }
-          onSceneMutate('update');
+          onSceneMutate('delete');
           redrawCanvas();
         }
         eraserHandlerRef.current = null;
