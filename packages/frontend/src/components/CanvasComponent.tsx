@@ -214,7 +214,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
   const MIN_ZOOM = 0.1;
   const MAX_ZOOM = 5;
-  const ZOOM_FACTOR = 0.08;
+  const ZOOM_STEP = 0.1;
 
   const applyCanvasTransform = useCallback(
     (ctx: CanvasRenderingContext2D) => {
@@ -1147,15 +1147,16 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       const currentScale = scaleRef.current;
       const currentPanX = panXRef.current;
       const currentPanY = panYRef.current;
-      const delta = -e.deltaY * ZOOM_FACTOR;
-      const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentScale + delta));
+      const direction = Math.sign(e.deltaY);
+      const newScale = direction > 0 ? currentScale - ZOOM_STEP : currentScale + ZOOM_STEP;
+      const clampedScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newScale));
 
       // Viewport-center-based zoom using shared utility
       const newTransform = zoomFromCenter(
         { scrollX: currentPanX, scrollY: currentPanY, zoom: currentScale },
         canvas.width,
         canvas.height,
-        newScale,
+        clampedScale,
       );
 
       scaleRef.current = newTransform.zoom;

@@ -216,7 +216,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
           }}
         >
           <button
-            onClick={() => onZoom(Math.round((scale - 0.25) * 100) / 100)}
+            onClick={() => onZoom(Math.round((scale - 0.1) * 100) / 100)}
             style={{
               width: '24px',
               height: '22px',
@@ -256,7 +256,7 @@ export default function BottomPanel({ roomId, userCount, wsStatus, scale, themeM
             {Math.round(scale * 100)}%
           </span>
           <button
-            onClick={() => onZoom(Math.round((scale + 0.25) * 100) / 100)}
+            onClick={() => onZoom(Math.round((scale + 0.1) * 100) / 100)}
             style={{
               width: '24px',
               height: '22px',
