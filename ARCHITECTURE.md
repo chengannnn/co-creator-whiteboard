@@ -1,7 +1,7 @@
 # Whiteboard Architecture (AI-Friendly)
 
 > **Target audience**: AI coding assistants (Claude, Copilot, etc.) picking up this project.
-> **Last updated**: 2026-04-16
+> **Last updated**: 2026-04-17
 > **Branch**: `feature/whiteboard-v2.1.8`
 
 ---
@@ -245,9 +245,10 @@ World → Screen:  screenX = worldX * zoom + scrollX
 ### Rule 2: Coordinate System for Closed Shapes vs Vector Lines
 
 **Closed shapes** (rectangle, ellipse, rhombus):
-- `pointermove` must keep `originX/Y` (the initial `el.x/el.y` set at `pointerdown`) **constant**.
-- Use `Math.min(origin, current)` for `x,y` and `Math.abs(current - origin)` for `width,height`.
-- See `RectangleHandler.ts:26-43` for the correct pattern.
+- `pointermove` must keep `originX`/`originY` **constant** — captured in a closure at `pointerdown` time (`let originX = worldX; let originY = worldY;`).
+- **Do NOT** use `el.x`/`el.y` for width/height calculation — these get overwritten on every `setDraft`, causing the origin to drift and breaking left/up drag directions.
+- Use `Math.min(originX, current)` for `x,y` and `Math.abs(current - originX)` for `width,height`.
+- See `RectangleHandler.ts:26-51` for the correct pattern.
 
 **Vector lines** (line, arrow):
 - `originX/Y` is the anchor point. The second endpoint is stored as relative offset in `points[1]`.

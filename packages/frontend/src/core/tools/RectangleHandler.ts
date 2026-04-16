@@ -16,8 +16,15 @@ interface DrawStyle {
  * Factory for bounding-box-based shape handlers (rectangle, ellipse, rhombus).
  */
 export function createBBoxHandler(type: 'rectangle' | 'ellipse' | 'rhombus', style: DrawStyle) {
+  // Capture the immutable initial click point
+  let originX = 0;
+  let originY = 0;
+
   return {
     onPointerDown(worldX: number, worldY: number, setDraft: (draft: DraftElement | null) => void): void {
+      originX = worldX;
+      originY = worldY;
+
       const base = createBaseElement(type, worldX, worldY, style);
       const el = { ...base, borderRadius: style.borderRadius ?? 0 } as SceneElement;
       setDraft(createDraft(el));
@@ -32,10 +39,10 @@ export function createBBoxHandler(type: 'rectangle' | 'ellipse' | 'rhombus', sty
       if (!draft || draft.element.type !== type) return;
 
       const el = draft.element;
-      const x = Math.min(el.x, worldX);
-      const y = Math.min(el.y, worldY);
-      const width = Math.abs(worldX - el.x);
-      const height = Math.abs(worldY - el.y);
+      const x = Math.min(originX, worldX);
+      const y = Math.min(originY, worldY);
+      const width = Math.abs(worldX - originX);
+      const height = Math.abs(worldY - originY);
 
       setDraft({
         ...draft,
