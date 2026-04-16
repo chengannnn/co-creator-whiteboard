@@ -3,6 +3,17 @@ Started: Thu Apr 16 2026
 Branch: feature/whiteboard-v2.1.8
 ---
 
+## Codebase Patterns
+- SVG icon components are defined inline in UnifiedToolbar.tsx, not in a separate file
+- Icon pattern: `width="18" height="18" viewBox="0 0 24 24"`, use `currentColor` for stroke/fill to inherit theme colors
+- Solid variants use `fill="currentColor"` alongside `stroke="currentColor"`
+- Divider styling: `width: '1px', height: '24px', backgroundColor: theme.divider, margin: '0 2px', flexShrink: 0`
+- `theme.divider` provides dark-mode compatible color (light: #f0e4c0, dark: #444444)
+- Row 1 button order: DragHandle | Lock | Select | Divider | TOOLS | Divider | SharpCorner | RoundCorner | Divider | Group | Ungroup | Divider | Image
+- Run typecheck via `npx tsc --noEmit` in `packages/frontend/` directory
+- Tests run via `npx vitest run` in `packages/frontend/` directory
+---
+
 ## [2026-04-16] - US-001
 - Replaced Unicode tool icons with SVG components for Rectangle, Rectangle-Solid, Line, and Arrow
 - Files changed: `packages/frontend/src/components/UnifiedToolbar.tsx`
@@ -29,4 +40,20 @@ Branch: feature/whiteboard-v2.1.8
   - Circle with r=9 centered at 12,12 gives good visual size within 24x24 viewBox
   - Diamond path "M12 3 L21 12 L12 21 L3 12 Z" touches all four edges of viewBox for balanced visual size
   - Same solid icon pattern as US-001: fill="currentColor" + stroke="currentColor"
+---
+
+## [2026-04-16] - US-003
+- Reordered Row 1 toolbar buttons into logical groups: Tools | Corners | Group/Ungroup | Image
+- Added divider after TOOLS.map() (between Eraser and SharpCorner)
+- Added divider between RoundCorner and Group buttons
+- Added divider between Ungroup and Insert Image
+- Moved Insert Image to rightmost position in Row 1 (was previously between TOOLS and SharpCorner)
+- SharpCorner and RoundCorner remain adjacent with no divider between them
+- Group and Ungroup remain adjacent with no divider between them
+- All dividers use `theme.divider` for color ensuring dark mode compatibility
+- Files changed: `packages/frontend/src/components/UnifiedToolbar.tsx`
+- Typecheck, lint, and all 57 tests pass
+- **Learnings for future iterations:**
+  - Divider component pattern: 1px wide, 24px tall, `theme.divider` color, `margin: '0 2px'`, `flexShrink: 0`
+  - Row 1 final order: DragHandle | Lock | Select | Divider | TOOLS | Divider | SharpCorner | RoundCorner | Divider | Group | Ungroup | Divider | Image
 ---
