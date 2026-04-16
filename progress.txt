@@ -45,3 +45,24 @@ Branch: feature/whiteboard-v2.1.6
   - The existing round corner rendering in CanvasComponent.tsx uses `borderRadius: isRoundCapable && isRoundCornerEnabled ? 12 : 0` which already handles sharp corners when isRoundCornerEnabled is false
   - Typecheck command: `npm run typecheck`
 ---
+## [2026-04-16] - US-004
+- Implemented standalone Group and Ungroup buttons with correct state machine
+- Replaced single Group/Ungroup toggle button with two separate buttons in UnifiedToolbar Row 1
+- Created new GroupIcon SVG (four squares converging toward center)
+- Created new UngroupIcon SVG (four squares spreading outward from center)
+- Group button enabled when: selectedElements.length >= 2 AND NOT areElementsInSameGroup(selectedElements)
+- Ungroup button enabled when: ALL selected elements share a common groupId AND no other non-selected elements have that same groupId (does NOT require length >= 2, allowing orphaned 1-element group ungrouping)
+- Updated onUngroup callback to accept groupId parameter
+- Updated CanvasComponent.ungroupSelectedElements to accept groupId parameter
+- Removed unused getSharedGroupId helper function
+- Z-index preserved during ungroup (element order not changed)
+- Both buttons have correct disabled visual state (opacity 0.4)
+- Files changed:
+  - `packages/frontend/src/components/UnifiedToolbar.tsx` (new icons, two buttons, new enablement logic)
+  - `packages/frontend/src/components/CanvasComponent.tsx` (updated ungroupSelectedElements signature)
+  - `packages/frontend/src/App.tsx` (updated handleUngroup to accept groupId)
+- **Learnings for future iterations:**
+  - The group/ungroup enablement logic lives entirely in UnifiedToolbar.tsx, not in CanvasComponent
+  - CanvasComponent's ungroupSelectedElements accepts an explicit groupId rather than computing it, keeping the toolbar in control of the state machine
+  - Typecheck command: `npm run typecheck`
+---

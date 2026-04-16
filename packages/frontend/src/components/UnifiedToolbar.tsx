@@ -20,14 +20,23 @@ const EraserIcon = () => (
   </svg>
 );
 
-/** SVG icon for group/ungroup (merged square with dots at four corners). */
+/** SVG icon for Group — four squares converging toward center. */
 const GroupIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <circle cx="7" cy="7" r="1.5" fill="currentColor" />
-    <circle cx="17" cy="7" r="1.5" fill="currentColor" />
-    <circle cx="7" cy="17" r="1.5" fill="currentColor" />
-    <circle cx="17" cy="17" r="1.5" fill="currentColor" />
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+/** SVG icon for Ungroup — four squares spreading outward from center. */
+const UngroupIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="1" width="8" height="8" rx="1" />
+    <rect x="15" y="1" width="8" height="8" rx="1" />
+    <rect x="1" y="15" width="8" height="8" rx="1" />
+    <rect x="15" y="15" width="8" height="8" rx="1" />
   </svg>
 );
 
@@ -116,17 +125,6 @@ function areElementsInSameGroup(elements: SceneElement[]): boolean {
   );
 }
 
-/** Get the shared groupId if all selected elements belong to the same group. */
-function getSharedGroupId(elements: SceneElement[]): string | null {
-  if (elements.length === 0) return null;
-  const firstGroupIds = elements[0]?.groupIds ?? [];
-  if (firstGroupIds.length === 0) return null;
-  const shared = firstGroupIds.find((gid) =>
-    elements.every((el) => el.groupIds.includes(gid)),
-  );
-  return shared ?? null;
-}
-
 interface UnifiedToolbarProps {
   activeTool: ToolType;
   onToolChange: (tool: ToolType) => void;
@@ -153,7 +151,7 @@ interface UnifiedToolbarProps {
   onSharpCornerToggle: () => void;
   selectedElements: SceneElement[];
   onGroup: () => void;
-  onUngroup: () => void;
+  onUngroup: (groupId: string) => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
   onBringForward: () => void;
@@ -194,12 +192,41 @@ export default function UnifiedToolbar({
   const theme = getThemeColors(themeMode);
   const canRoundCorner = activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
 
-  // Group/Ungroup state machine
-  const groupAction = selectedElements.length >= 2 && !areElementsInSameGroup(selectedElements)
-    ? 'group'
-    : selectedElements.length > 0 && getSharedGroupId(selectedElements)
-      ? 'ungroup'
-      : null;
+  // Group button: enabled when 2+ elements and not in same group
+  const canGroup = selectedElements.length >= 2 && !areElementsInSameGroup(selectedElements);
+
+  // Ungroup button: enabled when all selected elements share a common top-level groupId
+  // AND no other non-selected elements have that same groupId.
+  // Does NOT require length >= 2 (allows ungrouping orphaned 1-element groups).
+  const canUngroup = (() => {
+    if (selectedElements.length === 0) return false;
+    const firstGroupIds = selectedElements[0]?.groupIds ?? [];
+    if (firstGroupIds.length === 0) return false;
+    for (const gid of firstGroupIds) {
+      const allSelectedHaveIt = selectedElements.every((el) => el.groupIds.includes(gid));
+      if (!allSelectedHaveIt) continue;
+      // Check no non-selected element has this groupId
+      const nonSelectedHasIt = allElements.some(
+        (el) => !selectedElements.includes(el) && el.groupIds.includes(gid),
+      );
+      if (!nonSelectedHasIt) return true;
+    }
+    return false;
+  })();
+
+  const sharedGroupIdForUngroup = (() => {
+    if (selectedElements.length === 0) return null;
+    const firstGroupIds = selectedElements[0]?.groupIds ?? [];
+    for (const gid of firstGroupIds) {
+      const allSelectedHaveIt = selectedElements.every((el) => el.groupIds.includes(gid));
+      if (!allSelectedHaveIt) continue;
+      const nonSelectedHasIt = allElements.some(
+        (el) => !selectedElements.includes(el) && el.groupIds.includes(gid),
+      );
+      if (!nonSelectedHasIt) return gid;
+    }
+    return null;
+  })();
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef<{ x: number; y: number; toolbarX: number; toolbarY: number } | null>(null);
@@ -544,16 +571,14 @@ export default function UnifiedToolbar({
           </svg>
         </button>
 
-        {/* Group/Ungroup button — rightmost of row 1 */}
+        {/* Group button */}
         <button
-          title={groupAction === 'ungroup' ? 'Ungroup' : groupAction === 'group' ? 'Group' : 'Group/Ungroup'}
-          disabled={!groupAction}
+          title="Group"
+          disabled={!canGroup}
           onClick={(e) => {
             e.stopPropagation();
-            if (groupAction === 'group') {
+            if (canGroup) {
               onGroup();
-            } else if (groupAction === 'ungroup') {
-              onUngroup();
             }
           }}
           style={{
@@ -562,28 +587,60 @@ export default function UnifiedToolbar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: groupAction === 'ungroup'
-              ? `2px solid ${theme.btnActiveBorder}`
-              : '1px solid transparent',
+            border: '1px solid transparent',
             borderRadius: '6px',
-            backgroundColor: groupAction ? theme.btnDefaultBg : theme.btnDefaultBg,
-            cursor: groupAction ? 'pointer' : 'not-allowed',
-            color: groupAction ? theme.textPrimary : theme.textMuted,
-            opacity: groupAction ? 1 : 0.4,
+            backgroundColor: theme.btnDefaultBg,
+            cursor: canGroup ? 'pointer' : 'not-allowed',
+            color: canGroup ? theme.textPrimary : theme.textMuted,
+            opacity: canGroup ? 1 : 0.4,
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (groupAction) {
+            if (canGroup) {
               (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
             }
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = groupAction === 'ungroup'
-              ? theme.btnActiveBg
-              : theme.btnDefaultBg;
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
           }}
         >
           <GroupIcon />
+        </button>
+
+        {/* Ungroup button */}
+        <button
+          title="Ungroup"
+          disabled={!canUngroup}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canUngroup && sharedGroupIdForUngroup) {
+              onUngroup(sharedGroupIdForUngroup);
+            }
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: canUngroup ? 'pointer' : 'not-allowed',
+            color: canUngroup ? theme.textPrimary : theme.textMuted,
+            opacity: canUngroup ? 1 : 0.4,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (canUngroup) {
+              (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+          }}
+        >
+          <UngroupIcon />
         </button>
       </div>
 

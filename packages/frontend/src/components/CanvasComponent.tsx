@@ -45,7 +45,7 @@ export interface CanvasComponentRef {
   undo: () => void;
   redo: () => void;
   groupSelectedElements: () => void;
-  ungroupSelectedElements: () => void;
+  ungroupSelectedElements: (groupId: string) => void;
   bringToFront: () => void;
   sendToBack: () => void;
   bringForward: () => void;
@@ -400,22 +400,23 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       renderStaticSceneRef.current?.();
       renderInteractiveRef.current?.();
     },
-    ungroupSelectedElements: () => {
-      // Find the shared groupId among selected elements
+    ungroupSelectedElements: (groupId: string) => {
       if (selectedIds.length === 0) return;
       const elements = scene.getElements();
-      const firstEl = elements.find((e) => e.id === selectedIds[0]);
-      if (!firstEl || firstEl.groupIds.length === 0) return;
-      // Find a groupId that all selected elements share
-      const sharedGroupId = firstEl.groupIds.find((gid) =>
-        selectedIds.every((id) => {
-          const el = elements.find((e) => e.id === id);
-          return el && el.groupIds.includes(gid);
-        }),
-      );
-      if (!sharedGroupId) return;
+      let targetGroupId: string | undefined = groupId;
+      if (!targetGroupId) {
+        const firstEl = elements.find((e) => e.id === selectedIds[0]);
+        if (!firstEl || firstEl.groupIds.length === 0) return;
+        targetGroupId = firstEl.groupIds.find((gid) =>
+          selectedIds.every((id) => {
+            const el = elements.find((e) => e.id === id);
+            return el && el.groupIds.includes(gid);
+          }),
+        );
+      }
+      if (!targetGroupId) return;
       history.push();
-      scene.ungroupElements(selectedIds, sharedGroupId);
+      scene.ungroupElements(selectedIds, targetGroupId);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
       renderInteractiveRef.current?.();

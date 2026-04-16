@@ -515,8 +515,8 @@ function WhiteboardRoom() {
     canvasRef.current?.groupSelectedElements();
   }, []);
 
-  const handleUngroup = useCallback(() => {
-    canvasRef.current?.ungroupSelectedElements();
+  const handleUngroup = useCallback((groupId: string) => {
+    canvasRef.current?.ungroupSelectedElements(groupId);
   }, []);
 
   const handleBringToFront = useCallback(() => {
