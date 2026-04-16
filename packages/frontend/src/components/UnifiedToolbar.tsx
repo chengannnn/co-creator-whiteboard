@@ -149,6 +149,7 @@ interface UnifiedToolbarProps {
   onRoundCornerToggle: () => void;
   isSharpCornerEnabled: boolean;
   onSharpCornerToggle: () => void;
+  isCornerModifierEnabled: boolean;
   selectedElements: SceneElement[];
   onGroup: () => void;
   onUngroup: (groupId: string) => void;
@@ -180,6 +181,7 @@ export default function UnifiedToolbar({
   onRoundCornerToggle,
   isSharpCornerEnabled,
   onSharpCornerToggle,
+  isCornerModifierEnabled,
   selectedElements,
   onGroup,
   onUngroup,
@@ -190,7 +192,6 @@ export default function UnifiedToolbar({
   allElements,
 }: UnifiedToolbarProps) {
   const theme = getThemeColors(themeMode);
-  const canRoundCorner = activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
 
   // Group button: enabled when 2+ elements and not in same group
   const canGroup = selectedElements.length >= 2 && !areElementsInSameGroup(selectedElements);
@@ -492,10 +493,10 @@ export default function UnifiedToolbar({
         {/* Sharp Corner button — immediately to the left of Round Corner */}
         <button
           title="Sharp Corner"
-          disabled={!canRoundCorner}
+          disabled={!isCornerModifierEnabled}
           onClick={(e) => {
             e.stopPropagation();
-            if (canRoundCorner) {
+            if (isCornerModifierEnabled) {
               onSharpCornerToggle();
             }
           }}
@@ -505,23 +506,23 @@ export default function UnifiedToolbar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: canRoundCorner && isSharpCornerEnabled
+            border: isCornerModifierEnabled && isSharpCornerEnabled
               ? `2px solid ${theme.btnActiveBorder}`
               : '1px solid transparent',
             borderRadius: '6px',
-            backgroundColor: canRoundCorner && isSharpCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
-            cursor: canRoundCorner ? 'pointer' : 'not-allowed',
-            color: canRoundCorner ? theme.textPrimary : theme.textMuted,
-            opacity: canRoundCorner ? 1 : 0.4,
+            backgroundColor: isCornerModifierEnabled && isSharpCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: isCornerModifierEnabled ? 'pointer' : 'not-allowed',
+            color: isCornerModifierEnabled ? theme.textPrimary : theme.textMuted,
+            opacity: isCornerModifierEnabled ? 1 : 0.4,
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (canRoundCorner && !isSharpCornerEnabled) {
+            if (isCornerModifierEnabled && !isSharpCornerEnabled) {
               (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
             }
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = canRoundCorner && isSharpCornerEnabled
+            (e.target as HTMLElement).style.backgroundColor = isCornerModifierEnabled && isSharpCornerEnabled
               ? theme.btnActiveBg
               : theme.btnDefaultBg;
           }}
@@ -532,10 +533,10 @@ export default function UnifiedToolbar({
         {/* Round Corner button — rightmost of row 1 */}
         <button
           title="Round Corner"
-          disabled={!canRoundCorner}
+          disabled={!isCornerModifierEnabled}
           onClick={(e) => {
             e.stopPropagation();
-            if (canRoundCorner) {
+            if (isCornerModifierEnabled) {
               onRoundCornerToggle();
             }
           }}
@@ -545,23 +546,23 @@ export default function UnifiedToolbar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: canRoundCorner && isRoundCornerEnabled
+            border: isCornerModifierEnabled && isRoundCornerEnabled
               ? `2px solid ${theme.btnActiveBorder}`
               : '1px solid transparent',
             borderRadius: '6px',
-            backgroundColor: canRoundCorner && isRoundCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
-            cursor: canRoundCorner ? 'pointer' : 'not-allowed',
-            color: canRoundCorner ? theme.textPrimary : theme.textMuted,
-            opacity: canRoundCorner ? 1 : 0.4,
+            backgroundColor: isCornerModifierEnabled && isRoundCornerEnabled ? theme.btnActiveBg : theme.btnDefaultBg,
+            cursor: isCornerModifierEnabled ? 'pointer' : 'not-allowed',
+            color: isCornerModifierEnabled ? theme.textPrimary : theme.textMuted,
+            opacity: isCornerModifierEnabled ? 1 : 0.4,
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (canRoundCorner && !isRoundCornerEnabled) {
+            if (isCornerModifierEnabled && !isRoundCornerEnabled) {
               (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
             }
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = canRoundCorner && isRoundCornerEnabled
+            (e.target as HTMLElement).style.backgroundColor = isCornerModifierEnabled && isRoundCornerEnabled
               ? theme.btnActiveBg
               : theme.btnDefaultBg;
           }}

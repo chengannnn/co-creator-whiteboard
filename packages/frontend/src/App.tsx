@@ -570,12 +570,40 @@ function WhiteboardRoom() {
         onSave={handleExportPng}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
+        isCornerModifierEnabled={
+          (() => {
+            // Condition A: active drawing tool
+            const isRoundCapableTool =
+              activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
+            // Condition B: Selection tool with rectangle/rhombus elements selected
+            const hasSelectedShapes = (() => {
+              if (activeTool !== 'select' || selectedIds.length === 0) return false;
+              return selectedIds.some((id) => {
+                const el = sceneRef.current.getElement(id);
+                return el && (el.type === 'rectangle' || el.type === 'rhombus');
+              });
+            })();
+            return isRoundCapableTool || hasSelectedShapes;
+          })()
+        }
         isRoundCornerEnabled={isRoundCornerEnabled}
         onRoundCornerToggle={handleRoundCornerToggle}
         isSharpCornerEnabled={
-          (activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid')
-            ? !isRoundCornerEnabled
-            : false
+          (() => {
+            // Condition A: active drawing tool
+            const isRoundCapableTool =
+              activeTool === 'rectangle' || activeTool === 'rectangle-solid' || activeTool === 'rhombus' || activeTool === 'rhombus-solid';
+            // Condition B: Selection tool with rectangle/rhombus elements selected
+            const hasSelectedShapes = (() => {
+              if (activeTool !== 'select' || selectedIds.length === 0) return false;
+              return selectedIds.some((id) => {
+                const el = sceneRef.current.getElement(id);
+                return el && (el.type === 'rectangle' || el.type === 'rhombus');
+              });
+            })();
+            const enabled = isRoundCapableTool || hasSelectedShapes;
+            return enabled ? !isRoundCornerEnabled : false;
+          })()
         }
         onSharpCornerToggle={handleRoundCornerToggle}
         selectedElements={selectedIds.map((id) => sceneRef.current.getElement(id)).filter((el): el is SceneElement => el !== undefined)}
