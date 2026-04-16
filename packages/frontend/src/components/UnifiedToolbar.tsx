@@ -81,6 +81,35 @@ const SharpCornerIcon = () => (
   </svg>
 );
 
+/** SVG icon for Rectangle tool — outline rectangle. */
+const RectangleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="6" width="16" height="12" rx="1" />
+  </svg>
+);
+
+/** SVG icon for Rectangle-Solid tool — filled rectangle. */
+const RectangleSolidIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="6" width="16" height="12" rx="1" />
+  </svg>
+);
+
+/** SVG icon for Line tool — diagonal line. */
+const LineIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="19" x2="19" y2="5" />
+  </svg>
+);
+
+/** SVG icon for Arrow tool — arrow pointing up-right. */
+const ArrowIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="19" x2="19" y2="5" />
+    <polyline points="11 5 19 5 19 13" />
+  </svg>
+);
+
 const UNIFIED_COLORS = [
   '#000000', // black
   '#e03131', // red
@@ -103,14 +132,14 @@ type ShapeTool = {
 };
 
 const TOOLS: ShapeTool[] = [
-  { id: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R', fillStyle: 'none' },
-  { id: 'rectangle-solid', label: 'Rectangle', icon: '▮', shortcut: 'R', fillStyle: 'solid' },
+  { id: 'rectangle', label: 'Rectangle', icon: RectangleIcon, shortcut: 'R', fillStyle: 'none' },
+  { id: 'rectangle-solid', label: 'Rectangle', icon: RectangleSolidIcon, shortcut: 'R', fillStyle: 'solid' },
   { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O', fillStyle: 'none' },
   { id: 'ellipse-solid', label: 'Ellipse', icon: '●', shortcut: 'O', fillStyle: 'solid' },
   { id: 'rhombus', label: 'Rhombus', icon: '◇', shortcut: 'D', fillStyle: 'none' },
   { id: 'rhombus-solid', label: 'Rhombus', icon: '◆', shortcut: 'D', fillStyle: 'solid' },
-  { id: 'line', label: 'Line', icon: '╱', shortcut: 'L' },
-  { id: 'arrow', label: 'Arrow', icon: '→', shortcut: 'A' },
+  { id: 'line', label: 'Line', icon: LineIcon, shortcut: 'L' },
+  { id: 'arrow', label: 'Arrow', icon: ArrowIcon, shortcut: 'A' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },
   { id: 'eraser', label: 'Eraser', icon: EraserIcon, shortcut: 'X' },
 ];

@@ -1,20 +1,17 @@
 {
-  "project": "Whiteboard v2.1.7",
-  "branchName": "feature/whiteboard-v2.1.7",
-  "description": "Fix corner modifier buttons disabled during shape selection with Selection tool, and replace Sharp/Round Corner icons with 1/4 corner SVGs.",
+  "project": "Whiteboard v2.1.8",
+  "branchName": "feature/whiteboard-v2.1.8",
+  "description": "Toolbar layout refactor and icon visual balancing. Reorder Row 1 buttons into logical groups with dividers, and replace Unicode icons with SVG components with precise Circle/Rhombus visual size matching.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix corner modifier buttons disabled during shape selection",
-      "description": "As a user, I want the Sharp/Round Corner buttons to be usable when I select existing rectangle/rhombus shapes with the Selection tool, so I can modify their corner style without having to re-select the drawing tool.",
+      "title": "Replace Unicode tool icons with SVG components",
+      "description": "As a developer, I want all tool icons to use SVG instead of Unicode characters so that rendering is consistent across Windows, Mac, and Linux.",
       "acceptanceCriteria": [
-        "Rename canRoundCorner to isCornerModifierEnabled and change logic from only activeTool check to OR logic",
-        "Condition A (Global Preset): activeTool is one of rectangle, rectangle-solid, rhombus, rhombus-solid (existing logic)",
-        "Condition B (Attribute Modifier): activeTool === 'select' AND selectedElements.length > 0 AND at least one selected element has type 'rectangle' or 'rhombus'",
-        "Button is enabled when Condition A OR Condition B is true",
-        "When Condition B is met and Sharp Corner is clicked, iterate through selected elements, set eligible ones' borderRadius to 0, push history, call onSceneMutate('update')",
-        "When Condition B is met and Round Corner is clicked, same flow but set borderRadius to 12",
-        "Button visual active state correctly reflects isRoundCornerEnabled value regardless of which condition triggered enabled state",
+        "Create SVG icon components for Rectangle, Rectangle-Solid, Line, Arrow in UnifiedToolbar.tsx following existing pattern (18x18 display, 0 0 24 24 viewBox, currentColor stroke, fill none)",
+        "Eraser icon remains unchanged (already an SVG component)",
+        "TOOLS array icon field references SVG component functions for Rectangle, Rectangle-Solid, Line, Arrow",
+        "Icon rendering in button simplified to always use <tool.icon /> since all icons are now functions",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
@@ -24,20 +21,41 @@
     },
     {
       "id": "US-002",
-      "title": "Replace corner modifier icons with 1/4 corner SVGs",
-      "description": "As a user, I want the Sharp/Round Corner icons to show just the corner symbol (not the full shape), so I can more quickly understand what each button controls.",
+      "title": "Add SVG Ellipse and Rhombus icon components with visual size balancing",
+      "description": "As a user, I want the Circle and Rhombus icons to appear the same visual size so the toolbar feels balanced.",
       "acceptanceCriteria": [
-        "SharpCornerIcon replaced with 1/4 square L-shape corner SVG: path M 8 16 L 8 8 L 16 8 on viewBox 0 0 24 24, strokeWidth 2, strokeLinecap round, strokeLinejoin round",
-        "RoundCornerIcon replaced with 1/4 circular arc SVG: path M 8 16 A 8 8 0 0 1 16 8 on viewBox 0 0 24 24, strokeWidth 2, strokeLinecap round",
-        "Both icons use currentColor for stroke and fill none for consistent theming",
-        "Active state (highlighted border/background) displays correctly when respective corner mode is active",
-        "Disabled state (opacity 0.4, muted color) displays correctly when neither Condition A nor Condition B is met",
-        "Hover state shows background color change consistently with other toolbar buttons",
+        "Create Ellipse SVG icon component with <circle> using r=9 (viewBox 0 0 24 24) for outline circle",
+        "Create Ellipse-Solid SVG icon component with <circle r=9> and fill=currentColor for solid circle",
+        "Create Rhombus SVG icon component with diamond path for outline rhombus",
+        "Create Rhombus-Solid SVG icon component with diamond path and fill=currentColor for solid rhombus",
+        "Circle and Rhombus icons appear visually equal in size within the toolbar buttons",
+        "Update TOOLS array to reference the new SVG components for ellipse, ellipse-solid, rhombus, rhombus-solid",
+        "currentColor inheritance ensures active/disabled state coloring still works correctly",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Reorder toolbar buttons and insert dividers in Row 1",
+      "description": "As a user, I want the toolbar buttons grouped logically (Tools | Corners | Group/Ungroup | Image) with visual dividers so I can find tools faster.",
+      "acceptanceCriteria": [
+        "Eraser remains in TOOLS array as last item (no data structure change)",
+        "A divider (1px wide, 24px tall, theme.divider color) is rendered immediately after TOOLS.map() block (between Eraser and SharpCorner)",
+        "SharpCorner and RoundCorner buttons are adjacent with no divider between them",
+        "A divider is rendered between RoundCorner and Group buttons",
+        "Group and Ungroup buttons are adjacent with no divider between them",
+        "A divider is rendered between Ungroup and Insert Image button",
+        "Insert Image is now the rightmost button in Row 1",
+        "All dividers use theme.divider for color (light: #f0e4c0, dark: #444444) ensuring dark mode compatibility",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
       "notes": ""
     }
   ]
