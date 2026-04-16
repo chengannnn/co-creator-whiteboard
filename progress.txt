@@ -27,3 +27,15 @@ Branch: feature/whiteboard-v2.1.7
   - The existing `handleRoundCornerToggle` works for both Condition A and Condition B since it already filters selectedIds for eligible element types
   - Typecheck command: `npm run typecheck`
 ---
+
+## [2026-04-16] - US-002 (v2.1.7)
+- Replaced corner modifier icons with 1/4 corner SVGs
+- SharpCornerIcon: changed from full rectangle to 1/4 square L-shape corner SVG path `M 8 16 L 8 8 L 16 8`
+- RoundCornerIcon: changed inline SVG to 1/4 circular arc SVG path `M 8 16 A 8 8 0 0 1 16 8`
+- Both icons use `currentColor` for stroke and `fill="none"` for consistent theming (unchanged from existing pattern)
+- Files changed:
+  - `packages/frontend/src/components/UnifiedToolbar.tsx` (updated SharpCornerIcon component and RoundCornerIcon inline SVG)
+- **Learnings for future iterations:**
+  - Icon components in UnifiedToolbar follow a consistent pattern: 18x18 display size, 24x24 viewBox, `currentColor` stroke, `fill="none"`, `strokeWidth="2"`, `strokeLinecap="round"`, `strokeLinejoin="round"`
+  - Round Corner icon is inline SVG within the button JSX (not a separate component) — unlike SharpCornerIcon which is a named component above
+---

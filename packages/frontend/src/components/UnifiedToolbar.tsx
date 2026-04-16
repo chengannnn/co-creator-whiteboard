@@ -74,10 +74,10 @@ const SendBackwardIcon = () => (
   </svg>
 );
 
-/** SVG icon for Sharp Corner — rectangle with sharp 90-degree corners. */
+/** SVG icon for Sharp Corner — 1/4 square L-shape corner. */
 const SharpCornerIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="5" width="14" height="14" />
+    <path d="M 8 16 L 8 8 L 16 8" />
   </svg>
 );
 
@@ -567,8 +567,8 @@ export default function UnifiedToolbar({
               : theme.btnDefaultBg;
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12a8 8 0 0 1 8-8" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M 8 16 A 8 8 0 0 1 16 8" />
           </svg>
         </button>
 
