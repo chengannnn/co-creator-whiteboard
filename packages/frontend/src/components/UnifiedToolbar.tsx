@@ -110,6 +110,34 @@ const ArrowIcon = () => (
   </svg>
 );
 
+/** SVG icon for Ellipse tool — outline circle. */
+const EllipseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+  </svg>
+);
+
+/** SVG icon for Ellipse-Solid tool — filled circle. */
+const EllipseSolidIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+  </svg>
+);
+
+/** SVG icon for Rhombus tool — outline diamond. */
+const RhombusIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3 L21 12 L12 21 L3 12 Z" />
+  </svg>
+);
+
+/** SVG icon for Rhombus-Solid tool — filled diamond. */
+const RhombusSolidIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3 L21 12 L12 21 L3 12 Z" />
+  </svg>
+);
+
 const UNIFIED_COLORS = [
   '#000000', // black
   '#e03131', // red
@@ -134,10 +162,10 @@ type ShapeTool = {
 const TOOLS: ShapeTool[] = [
   { id: 'rectangle', label: 'Rectangle', icon: RectangleIcon, shortcut: 'R', fillStyle: 'none' },
   { id: 'rectangle-solid', label: 'Rectangle', icon: RectangleSolidIcon, shortcut: 'R', fillStyle: 'solid' },
-  { id: 'ellipse', label: 'Ellipse', icon: '○', shortcut: 'O', fillStyle: 'none' },
-  { id: 'ellipse-solid', label: 'Ellipse', icon: '●', shortcut: 'O', fillStyle: 'solid' },
-  { id: 'rhombus', label: 'Rhombus', icon: '◇', shortcut: 'D', fillStyle: 'none' },
-  { id: 'rhombus-solid', label: 'Rhombus', icon: '◆', shortcut: 'D', fillStyle: 'solid' },
+  { id: 'ellipse', label: 'Ellipse', icon: EllipseIcon, shortcut: 'O', fillStyle: 'none' },
+  { id: 'ellipse-solid', label: 'Ellipse', icon: EllipseSolidIcon, shortcut: 'O', fillStyle: 'solid' },
+  { id: 'rhombus', label: 'Rhombus', icon: RhombusIcon, shortcut: 'D', fillStyle: 'none' },
+  { id: 'rhombus-solid', label: 'Rhombus', icon: RhombusSolidIcon, shortcut: 'D', fillStyle: 'solid' },
   { id: 'line', label: 'Line', icon: LineIcon, shortcut: 'L' },
   { id: 'arrow', label: 'Arrow', icon: ArrowIcon, shortcut: 'A' },
   { id: 'freehand', label: 'Pencil', icon: '✏', shortcut: 'P' },

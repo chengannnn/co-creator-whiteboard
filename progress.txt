@@ -1,47 +1,32 @@
 # Ralph Progress Log
 Started: Thu Apr 16 2026
-Branch: feature/whiteboard-v2.1.7
+Branch: feature/whiteboard-v2.1.8
 ---
 
-## Codebase Patterns
-- Typecheck command: `npm run typecheck` (runs tsc on both backend and frontend)
-- Corner modifier enablement logic is computed in App.tsx and passed as `isCornerModifierEnabled` prop to UnifiedToolbar (not computed locally in UnifiedToolbar)
-- `handleRoundCornerToggle` in App.tsx already handles both drawing-time (Condition A) and attribute-modifier (Condition B) scenarios — it filters selectedIds for rectangle/rhombus and applies borderRadius
-- `isSharpCornerEnabled` is derived from `!isRoundCornerEnabled` when enabled; no separate useState
-
----
-
-## [2026-04-16] - US-001 (v2.1.7)
-- Implemented isCornerModifierEnabled with OR logic for corner modifier buttons
-- Renamed `canRoundCorner` to `isCornerModifierEnabled` and moved it from a local variable in UnifiedToolbar to a prop passed from App.tsx
-- Condition A: activeTool is rectangle/rectangle-solid/rhombus/rhombus-solid (existing logic)
-- Condition B: activeTool === 'select' AND selectedIds.length > 0 AND at least one selected element is rectangle/rhombus
-- Button enabled when Condition A OR Condition B is true
-- Updated isSharpCornerEnabled derivation in App.tsx to use the same OR logic so Sharp Corner button is also enabled during selection
-- handleRoundCornerToggle already correctly handles Condition B (filters eligible elements, applies borderRadius, pushes history, calls onSceneMutate)
-- Files changed:
-  - `packages/frontend/src/components/UnifiedToolbar.tsx` (renamed canRoundCorner to isCornerModifierEnabled prop, updated all button references)
-  - `packages/frontend/src/App.tsx` (added isCornerModifierEnabled computation, updated isSharpCornerEnabled derivation)
+## [2026-04-16] - US-001
+- Replaced Unicode tool icons with SVG components for Rectangle, Rectangle-Solid, Line, and Arrow
+- Files changed: `packages/frontend/src/components/UnifiedToolbar.tsx`
+- Created 4 new SVG icon components following existing pattern (18x18 display, 0 0 24 24 viewBox, currentColor)
+- RectangleSolidIcon uses fill=currentColor for solid fill variant
+- TOOLS array updated to reference SVG component functions instead of Unicode strings
+- Existing rendering logic (`typeof tool.icon === 'function'`) already supports both types, no JSX changes needed
+- Typecheck passes
 - **Learnings for future iterations:**
-  - Button enablement logic lives in App.tsx (centralized), not in UnifiedToolbar — this ensures both parent state and child props stay in sync
-  - The existing `handleRoundCornerToggle` works for both Condition A and Condition B since it already filters selectedIds for eligible element types
-  - Typecheck command: `npm run typecheck`
+  - SVG icon components are defined inline in UnifiedToolbar.tsx, not in a separate file
+  - Icon pattern: `width="18" height="18" viewBox="0 0 24 24"`, use `currentColor` for stroke/fill to inherit theme colors
+  - Solid variants use `fill="currentColor"` alongside `stroke="currentColor"`
+  - The `icon` field type is `string | React.FC`, rendering already handles both cases at line ~448
 ---
 
-## [2026-04-16] - US-002 (v2.1.7)
-- Replaced corner modifier icons with 1/4 corner SVGs
-- SharpCornerIcon: changed from full rectangle to 1/4 square L-shape corner SVG path `M 8 16 L 8 8 L 16 8`
-- RoundCornerIcon: changed inline SVG to 1/4 circular arc SVG path `M 8 16 A 8 8 0 0 1 16 8`
-- Both icons use `currentColor` for stroke and `fill="none"` for consistent theming (unchanged from existing pattern)
-- Files changed:
-  - `packages/frontend/src/components/UnifiedToolbar.tsx` (updated SharpCornerIcon component and RoundCornerIcon inline SVG)
+## [2026-04-16] - US-002
+- Created EllipseIcon (circle r=9 outline), EllipseSolidIcon (filled circle), RhombusIcon (diamond outline), RhombusSolidIcon (filled diamond) SVG components
+- Files changed: `packages/frontend/src/components/UnifiedToolbar.tsx`
+- Updated TOOLS array to reference SVG components instead of Unicode characters for ellipse, ellipse-solid, rhombus, rhombus-solid
+- All icons follow existing pattern: 18x18 display, 0 0 24 24 viewBox, currentColor for stroke/fill
+- Solid variants use fill=currentColor stroke=currentColor for proper theme color inheritance
+- Typecheck passes
 - **Learnings for future iterations:**
-  - Icon components in UnifiedToolbar follow a consistent pattern: 18x18 display size, 24x24 viewBox, `currentColor` stroke, `fill="none"`, `strokeWidth="2"`, `strokeLinecap="round"`, `strokeLinejoin="round"`
-  - Round Corner icon is inline SVG within the button JSX (not a separate component) — unlike SharpCornerIcon which is a named component above
----
-
-## [2026-04-16] - Verification & PRD Update
-- Verified US-001 and US-002 implementation: typecheck passes, lint passes (0 errors)
-- Updated prd.json to set passes: true for both US-001 and US-002
-- All user stories in PRD are now complete
+  - Circle with r=9 centered at 12,12 gives good visual size within 24x24 viewBox
+  - Diamond path "M12 3 L21 12 L12 21 L3 12 Z" touches all four edges of viewBox for balanced visual size
+  - Same solid icon pattern as US-001: fill="currentColor" + stroke="currentColor"
 ---
