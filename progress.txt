@@ -1,68 +1,29 @@
 # Ralph Progress Log
 Started: Thu Apr 16 2026
-Branch: feature/whiteboard-v2.1.6
+Branch: feature/whiteboard-v2.1.7
 ---
 
-## [2026-04-16] - US-001
-- Implemented fixed 0.1 zoom step for wheel and +/- buttons
-- Replaced `ZOOM_FACTOR = 0.08` with `ZOOM_STEP = 0.1` in CanvasComponent.tsx
-- Updated wheel handler to use `direction = Math.sign(e.deltaY)` for fixed 10% per tick
-- Updated BottomPanel.tsx +/- buttons from 0.25 to 0.1 step
-- Files changed:
-  - `packages/frontend/src/components/CanvasComponent.tsx`
-  - `packages/frontend/src/components/BottomPanel.tsx`
-- **Learnings for future iterations:**
-  - The `zoomFromCenter` utility in `core/transform.ts` is the shared function for viewport-center zoom — always use it when changing zoom logic
-  - Wheel handler is inside a `useEffect` with many dependencies — avoid changing the dependency list unless necessary
-  - Typecheck command: `npm run typecheck` (runs tsc on both backend and frontend)
+## Codebase Patterns
+- Typecheck command: `npm run typecheck` (runs tsc on both backend and frontend)
+- Corner modifier enablement logic is computed in App.tsx and passed as `isCornerModifierEnabled` prop to UnifiedToolbar (not computed locally in UnifiedToolbar)
+- `handleRoundCornerToggle` in App.tsx already handles both drawing-time (Condition A) and attribute-modifier (Condition B) scenarios — it filters selectedIds for rectangle/rhombus and applies borderRadius
+- `isSharpCornerEnabled` is derived from `!isRoundCornerEnabled` when enabled; no separate useState
+
 ---
-## [2026-04-16] - US-002
-- Implemented aligned layer management icon heights
-- BringForwardIcon: extended arrow shaft from y=11→y=19 to y=5→y=19, moved arrowhead from y=15 to y=9
-- SendBackwardIcon: extended arrow shaft from y=5→y=13 to y=5→y=19, moved arrowhead from y=9 to y=15
-- All 4 layer icons now span y=5 to y=19 (14px SVG bounding box)
-- Arrow head positions mirror their "to end" counterparts proportionally
+
+## [2026-04-16] - US-001 (v2.1.7)
+- Implemented isCornerModifierEnabled with OR logic for corner modifier buttons
+- Renamed `canRoundCorner` to `isCornerModifierEnabled` and moved it from a local variable in UnifiedToolbar to a prop passed from App.tsx
+- Condition A: activeTool is rectangle/rectangle-solid/rhombus/rhombus-solid (existing logic)
+- Condition B: activeTool === 'select' AND selectedIds.length > 0 AND at least one selected element is rectangle/rhombus
+- Button enabled when Condition A OR Condition B is true
+- Updated isSharpCornerEnabled derivation in App.tsx to use the same OR logic so Sharp Corner button is also enabled during selection
+- handleRoundCornerToggle already correctly handles Condition B (filters eligible elements, applies borderRadius, pushes history, calls onSceneMutate)
 - Files changed:
-  - `packages/frontend/src/components/UnifiedToolbar.tsx` (BringForwardIcon, SendBackwardIcon)
+  - `packages/frontend/src/components/UnifiedToolbar.tsx` (renamed canRoundCorner to isCornerModifierEnabled prop, updated all button references)
+  - `packages/frontend/src/App.tsx` (added isCornerModifierEnabled computation, updated isSharpCornerEnabled derivation)
 - **Learnings for future iterations:**
-  - Layer icons are inline SVGs defined directly in UnifiedToolbar.tsx (lines 35-66), not separate files
-  - Icon height consistency is determined by the SVG element's y-coordinates within the 0 0 24 24 viewBox
-  - Typecheck command: `npm run typecheck`
----
-## [2026-04-16] - US-003
-- Implemented Sharp Corner button with mutual-exclusion state
-- Added SharpCornerIcon SVG (sharp-cornered rectangle) in UnifiedToolbar.tsx
-- Added Sharp Corner button immediately to the left of Round Corner button
-- Sharp Corner has same enabled/disabled condition as Round Corner (rectangle/rectangle-solid/rhombus/rhombus-solid tools only)
-- Mutual exclusion: Sharp Corner shows active when !isRoundCornerEnabled for eligible tools
-- Clicking Sharp Corner calls handleRoundCornerToggle which sets isRoundCornerEnabled to false and applies borderRadius=0 to eligible selected elements
-- isSharpCornerEnabled derived in App.tsx from !isRoundCornerEnabled for eligible tools
-- Files changed:
-  - `packages/frontend/src/components/UnifiedToolbar.tsx` (SharpCornerIcon, new button, new props)
-  - `packages/frontend/src/App.tsx` (isSharpCornerEnabled derivation, new props passed)
-- **Learnings for future iterations:**
-  - handleRoundCornerToggle is reused for both Sharp and Round corner toggles since they share the same underlying logic (toggling isRoundCornerEnabled)
-  - The existing round corner rendering in CanvasComponent.tsx uses `borderRadius: isRoundCapable && isRoundCornerEnabled ? 12 : 0` which already handles sharp corners when isRoundCornerEnabled is false
-  - Typecheck command: `npm run typecheck`
----
-## [2026-04-16] - US-004
-- Implemented standalone Group and Ungroup buttons with correct state machine
-- Replaced single Group/Ungroup toggle button with two separate buttons in UnifiedToolbar Row 1
-- Created new GroupIcon SVG (four squares converging toward center)
-- Created new UngroupIcon SVG (four squares spreading outward from center)
-- Group button enabled when: selectedElements.length >= 2 AND NOT areElementsInSameGroup(selectedElements)
-- Ungroup button enabled when: ALL selected elements share a common groupId AND no other non-selected elements have that same groupId (does NOT require length >= 2, allowing orphaned 1-element group ungrouping)
-- Updated onUngroup callback to accept groupId parameter
-- Updated CanvasComponent.ungroupSelectedElements to accept groupId parameter
-- Removed unused getSharedGroupId helper function
-- Z-index preserved during ungroup (element order not changed)
-- Both buttons have correct disabled visual state (opacity 0.4)
-- Files changed:
-  - `packages/frontend/src/components/UnifiedToolbar.tsx` (new icons, two buttons, new enablement logic)
-  - `packages/frontend/src/components/CanvasComponent.tsx` (updated ungroupSelectedElements signature)
-  - `packages/frontend/src/App.tsx` (updated handleUngroup to accept groupId)
-- **Learnings for future iterations:**
-  - The group/ungroup enablement logic lives entirely in UnifiedToolbar.tsx, not in CanvasComponent
-  - CanvasComponent's ungroupSelectedElements accepts an explicit groupId rather than computing it, keeping the toolbar in control of the state machine
+  - Button enablement logic lives in App.tsx (centralized), not in UnifiedToolbar — this ensures both parent state and child props stay in sync
+  - The existing `handleRoundCornerToggle` works for both Condition A and Condition B since it already filters selectedIds for eligible element types
   - Typecheck command: `npm run typecheck`
 ---
