@@ -39,3 +39,9 @@ Branch: feature/whiteboard-v2.1.7
   - Icon components in UnifiedToolbar follow a consistent pattern: 18x18 display size, 24x24 viewBox, `currentColor` stroke, `fill="none"`, `strokeWidth="2"`, `strokeLinecap="round"`, `strokeLinejoin="round"`
   - Round Corner icon is inline SVG within the button JSX (not a separate component) — unlike SharpCornerIcon which is a named component above
 ---
+
+## [2026-04-16] - Verification & PRD Update
+- Verified US-001 and US-002 implementation: typecheck passes, lint passes (0 errors)
+- Updated prd.json to set passes: true for both US-001 and US-002
+- All user stories in PRD are now complete
+---
