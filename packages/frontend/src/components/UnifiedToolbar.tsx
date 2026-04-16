@@ -506,46 +506,16 @@ export default function UnifiedToolbar({
           </button>
         ))}
 
-        {/* Divider */}
+        {/* Divider after TOOLS (between Eraser and SharpCorner) */}
         <div
           style={{
             width: '1px',
             height: '24px',
             backgroundColor: theme.divider,
-            margin: '0 4px',
+            margin: '0 2px',
+            flexShrink: 0,
           }}
         />
-
-        {/* Image button */}
-        <button
-          title="Insert Image (I)"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleImageClick();
-          }}
-          style={{
-            width: '40px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid transparent',
-            borderRadius: '6px',
-            backgroundColor: theme.btnDefaultBg,
-            cursor: 'pointer',
-            fontSize: '16px',
-            color: theme.textPrimary,
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
-          }}
-        >
-          🖼
-        </button>
 
         {/* Sharp Corner button — immediately to the left of Round Corner */}
         <button
@@ -587,7 +557,7 @@ export default function UnifiedToolbar({
           <SharpCornerIcon />
         </button>
 
-        {/* Round Corner button — rightmost of row 1 */}
+        {/* Round Corner button */}
         <button
           title="Round Corner"
           disabled={!isCornerModifierEnabled}
@@ -628,6 +598,17 @@ export default function UnifiedToolbar({
             <path d="M 8 16 A 8 8 0 0 1 16 8" />
           </svg>
         </button>
+
+        {/* Divider between Corners and Group/Ungroup */}
+        <div
+          style={{
+            width: '1px',
+            height: '24px',
+            backgroundColor: theme.divider,
+            margin: '0 2px',
+            flexShrink: 0,
+          }}
+        />
 
         {/* Group button */}
         <button
@@ -699,6 +680,48 @@ export default function UnifiedToolbar({
           }}
         >
           <UngroupIcon />
+        </button>
+
+        {/* Divider between Ungroup and Insert Image */}
+        <div
+          style={{
+            width: '1px',
+            height: '24px',
+            backgroundColor: theme.divider,
+            margin: '0 2px',
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Image button — rightmost in Row 1 */}
+        <button
+          title="Insert Image (I)"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleImageClick();
+          }}
+          style={{
+            width: '40px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid transparent',
+            borderRadius: '6px',
+            backgroundColor: theme.btnDefaultBg,
+            cursor: 'pointer',
+            fontSize: '16px',
+            color: theme.textPrimary,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnHoverBg;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = theme.btnDefaultBg;
+          }}
+        >
+          🖼
         </button>
       </div>
 
