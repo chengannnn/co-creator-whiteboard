@@ -1,0 +1,44 @@
+{
+  "project": "Whiteboard v2.1.7",
+  "branchName": "feature/whiteboard-v2.1.7",
+  "description": "Fix corner modifier buttons disabled during shape selection with Selection tool, and replace Sharp/Round Corner icons with 1/4 corner SVGs.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix corner modifier buttons disabled during shape selection",
+      "description": "As a user, I want the Sharp/Round Corner buttons to be usable when I select existing rectangle/rhombus shapes with the Selection tool, so I can modify their corner style without having to re-select the drawing tool.",
+      "acceptanceCriteria": [
+        "Rename canRoundCorner to isCornerModifierEnabled and change logic from only activeTool check to OR logic",
+        "Condition A (Global Preset): activeTool is one of rectangle, rectangle-solid, rhombus, rhombus-solid (existing logic)",
+        "Condition B (Attribute Modifier): activeTool === 'select' AND selectedElements.length > 0 AND at least one selected element has type 'rectangle' or 'rhombus'",
+        "Button is enabled when Condition A OR Condition B is true",
+        "When Condition B is met and Sharp Corner is clicked, iterate through selected elements, set eligible ones' borderRadius to 0, push history, call onSceneMutate('update')",
+        "When Condition B is met and Round Corner is clicked, same flow but set borderRadius to 12",
+        "Button visual active state correctly reflects isRoundCornerEnabled value regardless of which condition triggered enabled state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Replace corner modifier icons with 1/4 corner SVGs",
+      "description": "As a user, I want the Sharp/Round Corner icons to show just the corner symbol (not the full shape), so I can more quickly understand what each button controls.",
+      "acceptanceCriteria": [
+        "SharpCornerIcon replaced with 1/4 square L-shape corner SVG: path M 8 16 L 8 8 L 16 8 on viewBox 0 0 24 24, strokeWidth 2, strokeLinecap round, strokeLinejoin round",
+        "RoundCornerIcon replaced with 1/4 circular arc SVG: path M 8 16 A 8 8 0 0 1 16 8 on viewBox 0 0 24 24, strokeWidth 2, strokeLinecap round",
+        "Both icons use currentColor for stroke and fill none for consistent theming",
+        "Active state (highlighted border/background) displays correctly when respective corner mode is active",
+        "Disabled state (opacity 0.4, muted color) displays correctly when neither Condition A nor Condition B is met",
+        "Hover state shows background color change consistently with other toolbar buttons",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

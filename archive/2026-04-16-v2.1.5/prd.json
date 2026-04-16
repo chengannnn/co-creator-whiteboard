@@ -1,0 +1,67 @@
+{
+  "project": "Whiteboard v2.1.5",
+  "branchName": "feature/whiteboard-v2.1.5",
+  "description": "彻底统一橡皮擦的 Canvas 自定义光标渲染，提取公共 zoomFromCenter 函数并绑定到 +/- 缩放按钮，替换图层管理的 SVG 箭头图标。",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Refactor eraser cursor to use Interactive Canvas rendering only",
+      "description": "As a user, I want the eraser ring to follow my mouse smoothly on the Interactive Canvas layer, so that there is only ONE cursor visible and it stays locked to my mouse position at all times.",
+      "acceptanceCriteria": [
+        "When AppState.activeTool === 'eraser', the canvas container CSS cursor is set to cursor: none to completely hide the browser/system cursor including the pink eraser icon",
+        "The eraser ring is rendered ONLY on the Interactive Canvas layer, drawn programmatically in the pointermove handler",
+        "On each pointermove event, the Interactive Canvas ring is cleared via clearRect before being redrawn at the new (currentX, currentY) position",
+        "The ring reaches 60fps smooth following with no lag and no ghost rings left behind at previous positions",
+        "When the mouse pointer leaves the canvas container, the eraser ring is cleared from the Interactive Canvas",
+        "When activeTool changes away from 'eraser', the ring is cleared and normal cursor is restored",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Extract shared zoomFromCenter function and wire it to +/- buttons",
+      "description": "As a user, I want the + and - buttons at the bottom-right corner to zoom from the viewport center, so that my focal point stays on screen when I click zoom buttons.",
+      "acceptanceCriteria": [
+        "A shared zoomFromCenter(targetZoom) function is created and exported in a view utils or store file",
+        "zoomFromCenter computes: cx = containerWidth / 2, cy = containerHeight / 2, worldX = (cx - scrollX) / zoom, worldY = (cy - scrollY) / zoom, newScrollX = cx - (worldX * targetZoom), newScrollY = cy - (worldY * targetZoom)",
+        "zoomFromCenter atomically updates zoom, scrollX, and scrollY together",
+        "The + button onClick handler calls zoomFromCenter(zoom + ZOOM_STEP) instead of a bare setZoom",
+        "The - button onClick handler calls zoomFromCenter(zoom - ZOOM_STEP) instead of a bare setZoom",
+        "The existing mouse wheel handler also uses zoomFromCenter with no duplicated formula",
+        "No bare setZoom calls remain anywhere in the codebase without scroll compensation",
+        "A square drawn at viewport center stays at screen absolute center through 5 consecutive + clicks and 5 consecutive - clicks",
+        "The square does not drift horizontally or vertically by even a few pixels during these zoom steps",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Replace layer management icons with minimal arrow SVGs",
+      "description": "As a user, I want the layer buttons to use simple, intuitive arrow icons, so that I can instantly understand what each button does without thinking.",
+      "acceptanceCriteria": [
+        "Bring Forward icon replaced with a simple upward arrow SVG (up arrow)",
+        "Send Backward icon replaced with a simple downward arrow SVG (down arrow)",
+        "Bring to Front icon replaced with an SVG of an upward arrow with a horizontal line above it (top barrier style)",
+        "Send to Back icon replaced with an SVG of a downward arrow with a horizontal line below it (bottom barrier style)",
+        "Icons are rendered as SVG elements or imported icon components, not Unicode text characters",
+        "Disabled state (reduced opacity for unclickable buttons) still applies correctly to the new icons",
+        "Hover state (visual feedback when mouse enters button) still applies correctly to the new icons",
+        "The Layer button group layout (position, spacing, | dividers) remains unchanged",
+        "Clicking each button still correctly triggers the corresponding layer operation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

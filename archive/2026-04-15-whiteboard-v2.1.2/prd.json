@@ -1,0 +1,90 @@
+{
+  "project": "Whiteboard v2.1.2",
+  "branchName": "feature/whiteboard-v2.1-refactor",
+  "description": "渲染层降级与核心交互修复：移除 Rough.js 依赖，统一使用原生 Canvas 2D 渲染，修复交互层拖尾残影、向左/向上拖拽绘制失效、选中图形拉伸不稳定等致命缺陷。",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove Rough.js dependency and roughness-related data properties",
+      "description": "As a developer, I want to remove the Rough.js library and all roughness-related properties so that the project has fewer dependencies and a smaller bundle size.",
+      "acceptanceCriteria": [
+        "Remove `roughjs` from package.json dependencies and node_modules",
+        "Remove `roughness` and `seed` properties from SceneElement interface and all related type definitions",
+        "Remove all `roughjs` import statements from the codebase",
+        "Clean up all code paths that referenced roughness/seed properties",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Rewrite drawElement function to use native Canvas 2D APIs",
+      "description": "As a developer, I want to rewrite the drawElement rendering function to use native Canvas 2D APIs so that all shapes render as clean, standard vector geometry.",
+      "acceptanceCriteria": [
+        "Rectangles rendered using ctx.strokeRect() and ctx.fillRect()",
+        "Rhombuses rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo() + ctx.closePath()",
+        "Lines rendered using ctx.beginPath() + ctx.moveTo() + ctx.lineTo()",
+        "Arrows rendered with standard paths plus arrowhead triangle, no hand-drawn jitter",
+        "All shape types render correctly on both Static and Interactive Canvas layers",
+        "Shape style properties (strokeColor, fillColor, strokeWidth) still apply correctly",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fix Interactive Canvas ghosting/trail artifacts during drawing",
+      "description": "As a user, I want the drawing canvas to not leave ghosting trails when I drag to create shapes, so that my workspace stays clean and responsive.",
+      "acceptanceCriteria": [
+        "Interactive Canvas cleared with ctx.clearRect(0, 0, canvas.width, canvas.height) before each draft redraw in pointermove handler",
+        "clearRect only affects Interactive Canvas, Static Canvas and its committed shapes are unaffected",
+        "Dragging to draw shows only one live draft shape, no overlapping ghost trails",
+        "After pointerup, draft disappears completely, only committed shape remains on Static Canvas",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Fix left/up direction drag drawing failure",
+      "description": "As a user, I want to draw shapes by dragging the mouse in any direction (left, up, right, down), so that the drawing experience feels natural.",
+      "acceptanceCriteria": [
+        "Dragging left from start point renders rectangle/rhombus correctly",
+        "Dragging up from start point renders rectangle/rhombus correctly",
+        "Dragging in all diagonal directions (top-left, bottom-left, top-right, bottom-right) renders correctly",
+        "Coordinate calculation uses Math.min(startX, currentX) for x/y and Math.abs(currentX - startX) for width/height",
+        "Committed shape position and dimensions on Static Canvas match actual mouse drag trajectory",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Fix unstable resize behavior on selected shapes",
+      "description": "As a user, I want to reliably resize a selected shape by dragging its handles, so that I can precisely adjust shape dimensions.",
+      "acceptanceCriteria": [
+        "Selected shape displays standard resize handles (nw, ne, sw, se, n, s, e, w) positioned on exact mathematical bounding box",
+        "Dragging corner handles (nw, ne, sw, se) correctly updates shape x, y, width, height based on mouse delta",
+        "Dragging edge midpoint handles (n, s, e, w) correctly adjusts dimension in corresponding direction",
+        "Shape bounding box tracks mouse cursor position during drag, no jumping or misalignment",
+        "Shape width and height constrained to minimum 1 pixel to prevent axis-crossing flip issues",
+        "Released mouse commits resized shape to Static Canvas",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

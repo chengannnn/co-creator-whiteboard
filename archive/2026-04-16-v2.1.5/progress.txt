@@ -1,0 +1,243 @@
+# Ralph Progress Log
+Started: Tue Apr 15 2026
+---
+
+## Codebase Patterns
+- core/transform.ts is the canonical place for view/zoom utilities — contains zoomFromCenter, screenToWorld, worldToScreen, applyTransform
+- Zoom operations must update zoom, scrollX, and scrollY together to keep viewport center anchored — use zoomFromCenter from transform.ts
+- CanvasComponent uses ref-based state (scaleRef, panXRef) for immediate zoom updates in wheel handler; App.tsx uses React state (scale, panX, panY) — both must use same formula
+- `useImperativeHandle` is defined before `renderStaticScene`/`renderInteractive` useCallbacks — must use refs to access them from exposed methods
+- renderInteractive uses `scaleRef.current` and `panXRef.current` for transform values to avoid stale closures in event handlers
+- Eraser ring rendering: draw in screen coordinates (ctx.setTransform reset) inside renderInteractive to keep fixed size regardless of zoom level
+- Closed shapes (rectangle, ellipse, rhombus) share `createBBoxHandler` factory in RectangleHandler.ts — all use `Math.min`/`Math.abs` for coordinate normalization
+- Vector shapes (line, arrow) preserve direction via `points` array with signed deltas; `width`/`height` store absolute values separately
+- Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
+- Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
+- Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
+- Group selection: clicking any element with `groupIds` expands selection to all elements sharing that groupId via `scene.getGroupElementIds()`
+- Group rendering uses union bounding box with single dashed border; resize handles disabled for group selections (CRITICAL: groups move-only in v2.1.3)
+- Render callbacks (`renderStaticScene`, `renderInteractive`) must be accessed via refs in `useImperativeHandle` since they're defined after it
+- Layer ordering is controlled by the `index` property on SceneElement; getElements() sorts by `a.index - b.index`
+- scene.replaceAll() is used after index mutation to update the internal map with modified elements
+- History.push() must be called BEFORE the mutation to capture the pre-change state for undo
+- All layer operations are no-ops when selectedIds.length !== 1
+
+## [2026-04-15 23:30] - US-001
+- Refactored eraser cursor from React overlay div to Interactive Canvas rendering
+- CanvasComponent.tsx: Changed cursor style from 'cell' to 'none' when activeTool === 'eraser' (line 1999)
+- CanvasComponent.tsx: Removed 'eraser-cursor' CSS class from interactive canvas element
+- CanvasComponent.tsx: Added eraser ring drawing in renderInteractive() — draws circle with semi-transparent border/fill in screen coordinates (fixed size regardless of zoom)
+- CanvasComponent.tsx: Added eraser ring drawing in onPointerMove idle path — clearRect then draws ring at current mouse position for smooth 60fps following
+- CanvasComponent.tsx: Added eraser ring clearing in onPointerLeave — clearRect when mouse exits canvas with eraser active
+- CanvasComponent.tsx: Removed the overlay <div> that was previously rendering the eraser ring via React DOM
+- main.tsx: Removed import of eraser-cursor.css
+- Deleted eraser-cursor.css file (custom SVG cursor no longer needed)
+- Added eraserRadius to renderInteractive useCallback dependency array to fix lint warning
+- Typecheck passes, lint passes (only pre-existing warnings remain)
+- **Learnings for future iterations:**
+  - Drawing in screen coordinates (ctx.setTransform reset) inside a world-transformed canvas keeps UI elements at fixed visual size regardless of zoom
+  - The eraser ring uses eraserRadius * scaleRef.current as screen radius so it scales proportionally with zoom
+  - idle mode pointermove returns early after drawing eraser ring to avoid triggering select tool hit testing
+---
+- Closed shapes (rectangle, ellipse, rhombus) share `createBBoxHandler` factory in RectangleHandler.ts — all use `Math.min`/`Math.abs` for coordinate normalization
+- Vector shapes (line, arrow) preserve direction via `points` array with signed deltas; `width`/`height` store absolute values separately
+- Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
+- Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
+- Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
+
+## [2026-04-15 17:44] - US-001
+- Verified US-001 implementation: reverse drag coordinate normalization already in place
+- Coordinate normalization for closed shapes: `createBBoxHandler` uses `Math.min(startX, currentX)` and `Math.abs()` (RectangleHandler.ts:35-38)
+- Direction preservation for vector shapes: `createLineHandler` stores signed dx/dy in points array (LineHandler.ts:46-57)
+- Freehand normalization: `createFreehandHandler` recomputes bbox and normalizes relative to min (FreehandHandler.ts:42-54)
+- No code changes needed — all acceptance criteria met
+- **Learnings for future iterations:**
+  - The `getBaseShapeTool` function in CanvasComponent maps tool variants (e.g., `rectangle-solid`) to base types for handler logic
+  - `MIN_DIMENSION = 3` in RectangleHandler prevents tiny shapes from being committed
+  - All shape drawing uses native Canvas 2D APIs (drawShape function at CanvasComponent.tsx:339)
+---
+
+## [2026-04-15 18:10] - US-002
+- Implemented absolute coordinate calculation for resize handles
+- CanvasComponent.tsx: Rewrote `applyResize` to use `mouseX`/`mouseY` directly instead of `dx`/`dy` deltas. Each handle locks its opposite anchor corner and recalculates dimensions absolutely. Minimum dimension changed from 1px to 5px.
+- SelectToolHandler.ts: Same rewrite applied to duplicate `applyResize` function. Removed unused `resizeStartBounds` from state.
+- Typecheck passes
+- **Learnings for future iterations:**
+  - There are two copies of resize logic: CanvasComponent.tsx (primary, used by React pointer events) and SelectToolHandler.ts (standalone handler). Both must be kept in sync.
+  - The old delta-based approach (`width += dx`) caused drift because deltas were computed from original bounds but applied to already-modified bounds.
+---
+
+## [2026-04-15 18:45] - US-003
+- Implemented marquee selection for batch-selecting shapes
+- hitTesting.ts: Added `rectsIntersect` (AABB intersection) and `findElementsInRect` (find all elements intersecting a rectangle) utilities
+- CanvasComponent.tsx: Added `marqueeStart` and `marqueeEnd` refs for tracking drag rectangle
+- onPointerDown: When select tool clicks on empty canvas, stores marquee start point and enters 'selecting' mode
+- onPointerMove: In 'selecting' mode, updates marquee end point and triggers renderInteractive to draw the rectangle
+- onPointerUp: Computes normalized marquee bbox, intersects with all scene elements via findElementsInRect, updates selection
+- renderInteractive: Draws semi-transparent blue rectangle (fill rgba(0,120,255,0.1) + blue dashed border)
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - CanvasComponent has its own duplicated getElementBounds/getBBox/hitTestElements instead of using hitTesting.ts exports — the new findElementsInRect was imported but the local versions remain
+  - The renderInteractive function is called via explicit renderInteractive() from pointer handlers (not via React state), so ref-based marquee tracking works without re-rendering
+  - Minimum marquee threshold of 3px prevents accidental clicks from triggering selection
+---
+
+## Codebase Patterns
+- Closed shapes (rectangle, ellipse, rhombus) share `createBBoxHandler` factory in RectangleHandler.ts — all use `Math.min`/`Math.abs` for coordinate normalization
+- Vector shapes (line, arrow) preserve direction via `points` array with signed deltas; `width`/`height` store absolute values separately
+- Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
+- Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
+- Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
+- Group selection: clicking any element with `groupIds` expands selection to all elements sharing that groupId via `scene.getGroupElementIds()`
+- Group rendering uses union bounding box with single dashed border; resize handles disabled for group selections (CRITICAL: groups move-only in v2.1.3)
+- Render callbacks (`renderStaticScene`, `renderInteractive`) must be accessed via refs in `useImperativeHandle` since they're defined after it
+
+## [2026-04-15 19:45] - US-005
+- Implemented group and ungroup core logic
+- Scene.ts: Added `groupElements()` (generates crypto.randomUUID(), pushes to groupIds), `ungroupElements()` (removes specific groupId), and `getGroupElementIds()` (finds all elements sharing groupIds with a given element)
+- CanvasComponent.tsx: Group-aware selection — clicking grouped element auto-selects all group members via `scene.getGroupElementIds()`
+- CanvasComponent.tsx: Group rendering — draws single dashed border around union bounding box instead of individual borders; no resize handles for group selections
+- CanvasComponent.tsx: Disabled resize handle hit-testing when any selected element has groupIds (onPointerDown, hover cursor, wheel redraw, panning redraw)
+- CanvasComponent.tsx: Exposed `groupSelectedElements` and `ungroupSelectedElements` via canvas ref (uses ref-based render callback access to avoid forward-reference errors)
+- CanvasComponent.tsx: Added keyboard shortcuts — Ctrl+G/Cmd+G for group, Ctrl+Shift+G/Cmd+Shift+G for ungroup
+- Both group/ungroup push snapshot to history stack before mutation for undo/redo support
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - `useImperativeHandle` is defined before `renderStaticScene`/`renderInteractive` useCallbacks — must use refs to access them from exposed methods
+  - Group rendering must be updated in 4 places: renderInteractive, wheel handler, panning redraw, and any selection redraw — keep them in sync
+  - Elements can have multiple groupIds (nested groups supported at data level, though UI only handles single group for now)
+---
+
+## [2026-04-15 19:15] - US-004
+- Verified SceneElement interface already has `groupIds: string[]` property in BaseElement (element.ts:39)
+- Verified createBaseElement already initializes `groupIds: []` (helpers.ts:44)
+- Verified image element creation in App.tsx already includes `groupIds: []` (lines 386, 469)
+- Fixed shapeToElement function to preserve `groupIds` from incoming WebSocket shapes instead of always defaulting to `[]`. Added `groupIds?: string[]` to the shape parameter type (App.tsx:610) and changed commonBase to use `shape.groupIds ?? []` (App.tsx:626)
+- Backend's Shape interface uses `[key: string]: unknown` so groupIds passes through automatically in shape_create/shape_update broadcasts
+- Typecheck passes
+- **Learnings for future iterations:**
+  - The `shapeToElement` function is the ONLY place where groupIds could be lost during WebSocket sync — always check it when adding new element fields
+  - Backend stores shapes as generic `Shape` with index signature, so any field added to SceneElement will pass through without backend changes
+  - There are 4 places where elements are created: createBaseElement (tools), shapeToElement (WS sync), and two inline image element creations in App.tsx — all must be kept in sync for new fields
+---
+
+## [2026-04-15 20:30] - US-006
+- Implemented Group/Ungroup button in toolbar with state machine
+- UnifiedToolbar.tsx: Added GroupIcon SVG component (merged square with dots at four corners)
+- UnifiedToolbar.tsx: Added `areElementsInSameGroup` and `getSharedGroupId` helper functions for group state detection
+- UnifiedToolbar.tsx: Added groupAction derived state: 'group' when >= 2 elements not in same group, 'ungroup' when all selected elements share a groupId, null otherwise
+- UnifiedToolbar.tsx: Added Group/Ungroup button at rightmost position of Row 1 (after round corner button), disabled when groupAction is null (opacity 0.4, cursor not-allowed)
+- UnifiedToolbar.tsx: Button shows active border (2px solid btnActiveBorder) when in ungroup state, normal border when in group state
+- App.tsx: Added handleGroup and handleUngroup callbacks that delegate to canvasRef.current methods
+- App.tsx: Pass selectedElements (derived from selectedIds via sceneRef.current.getElement) and onGroup/onUngroup callbacks to UnifiedToolbar
+- Typecheck and lint pass
+- **Learnings for future iterations:**
+  - The toolbar's group state machine relies on derived data (selectedElements) passed from App.tsx rather than direct scene access — keeps the toolbar stateless and React-friendly
+  - The button is a single toggle that switches between Group and Ungroup semantics based on selection context, matching the acceptance criteria for a "single click" UX
+---
+
+## [2026-04-15 21:00] - US-001
+- Verified and confirmed US-001 implementation on new v2.1.4 branch
+- Closed shape coordinate normalization in RectangleHandler.ts:35-38 uses `Math.min(el.x, worldX)` and `Math.abs()` — prevents shapes from disappearing when dragging in reverse direction
+- Line/Arrow direction preservation in LineHandler.ts:46-57 stores signed `dx`/`dy` in `points` array, absolute values in `width`/`height`
+- Freehand normalization in FreehandHandler.ts:42-54 recomputes bbox from points and shifts relative to min
+- Typecheck passes
+- No code changes needed — all acceptance criteria met
+- **Learnings for future iterations:**
+  - Carried over from v2.1.3: the coordinate normalization fix was already in place
+---
+
+## [2026-04-15 21:30] - US-002
+- Added e.preventDefault() in eraser tool's onPointerDown (CanvasComponent.tsx:1444) to suppress native text selection and drag-and-drop
+- Created eraser-cursor.css with custom cursor: url(data URI SVG eraser icon), auto !important — persists during :active state
+- Applied 'eraser-cursor' CSS class to interactive canvas when activeTool === 'eraser'
+- Existing eraser circle overlay (position: fixed DIV) already follows mousePos ref during drag
+- Imported eraser-cursor.css in main.tsx
+- Typecheck passes
+- **Learnings for future iterations:**
+  - Inline styles in React cannot use !important; custom cursors that must persist during :active need a separate CSS class
+  - The eraser overlay circle uses mousePos.current (a ref), so it only updates when React re-renders for other state changes — the CSS cursor is the primary visual feedback during continuous drag
+---
+
+## [2026-04-15 22:00] - US-003
+- Refactored wheel handler in CanvasComponent to use viewport-center-based zoom instead of mouse-position-based zoom
+- Viewport center computed as canvas.width / 2, canvas.height / 2
+- World coordinates derived from viewport center, current pan, and current scale
+- After zoom change, scroll is recalculated: newPanX = viewportCenterX - worldX * newScale
+- App.tsx's setZoom already used viewport-center zoom with same formula via window.innerWidth/2, window.innerHeight/2
+- Typecheck passes
+- **Learnings for future iterations:**
+  - The viewport-center zoom formula is: `newPanX = viewportCenterX - ((viewportCenterX - oldPanX) / oldScale) * newScale`
+  - This can also be expressed as: `newPanX = viewportCenterX - (viewportCenterX - oldPanX) * scaleRatio` (algebraically equivalent)
+  - There are two zoom paths: wheel handler in CanvasComponent (ref-based, immediate) and setZoom in App.tsx (React state-based) — both must use the same formula
+---
+
+## [2026-04-15 22:30] - US-004
+- Created layerUtils.ts with 4 pure utility functions: bringToFront, sendToBack, bringForward, sendBackward
+- Each function takes a sorted SceneElement array and an element ID, mutates the element's index property, re-sorts the array, and returns it
+- bringToFront: sets target index to max+1, Send to Back: sets to min-1
+- Bring Forward/Send Backward: swap indices with adjacent element in sorted array
+- Integrated into CanvasComponent.tsx: added 4 methods to useImperativeHandle
+- Each method: checks single selection, gets elements, calls utility, pushes history, scene.replaceAll, triggers redraw
+- Typecheck passes
+- **Learnings for future iterations:**
+  - Layer ordering is controlled by the `index` property on SceneElement; getElements() sorts by `a.index - b.index`
+  - scene.replaceAll() is used after index mutation to update the internal map with modified elements
+  - History.push() must be called BEFORE the mutation to capture the pre-change state for undo
+  - All layer operations are no-ops when selectedIds.length !== 1
+---
+
+## [2026-04-15 23:00] - US-005
+- Added 4 SVG icon components: BringToFrontIcon, SendToBackIcon, BringForwardIcon, SendBackwardIcon
+- Added Layer section to Row 2 of UnifiedToolbar between Style and Save, labeled "Layer"
+- 4 icon buttons in a horizontal group: Bring Forward, Send Backward, Bring to Front, Send to Back
+- Disabled state: when no selection, multiple selection, or group selection (single element with groupIds)
+- Send Backward/Send to Back disabled when element is at index 0 (first visible)
+- Bring Forward/Bring to Front disabled when element is at last index
+- Added callbacks (onBringToFront, onSendToBack, onBringForward, onSendBackward) in App.tsx delegating to canvasRef
+- Passed allElements from sceneRef.current.getElements() for position calculation
+- Disabled buttons use opacity: 0.4 and cursor: not-allowed; enabled buttons show hover/active states
+- Typecheck passes
+- **Learnings for future iterations:**
+  - UnifiedToolbar Row 2 structure: Colors | Width | Style | Layer | Save | Clear | Theme
+  - Button disabled logic uses computed IIFE to derive state from selectedElements and allElements props
+  - Layer operations require both single selection AND non-grouped element (same constraints as US-004)
+---
+
+## [2026-04-15 23:45] - US-002
+- Extracted shared zoomFromCenter function in core/transform.ts
+- transform.ts: Added zoomFromCenter(targetZoom) that computes viewport-center-based zoom transform. Returns { scrollX, scrollY, zoom } together for atomic update.
+- CanvasComponent.tsx: Updated wheel handler (handleWheel) to use zoomFromCenter instead of inline formula. Passes current pan/scale refs, receives new transform values.
+- App.tsx: Updated setZoom to use zoomFromCenter. + and - buttons in BottomPanel already route through onZoom → setZoom.
+- Added zoomFromCenter import to CanvasComponent.tsx and App.tsx
+- Typecheck passes
+- **Learnings for future iterations:**
+  - core/transform.ts is the canonical place for view/zoom utilities — already has screenToWorld, worldToScreen, applyTransform
+  - React state setters (setPanX, setPanY, setScale) require functional updates when the zoom formula needs current values from multiple state variables
+  - The zoomFromCenter formula is algebraically equivalent to the scaleRatio approach but more explicit about world coordinate anchoring
+---
+
+## [2026-04-16 00:00] - US-003
+- Replaced all 4 layer management icons with minimal arrow SVGs in UnifiedToolbar.tsx
+- Bring Forward: simple upward arrow (polyline + line)
+- Send Backward: simple downward arrow (polyline + line)
+- Bring to Front: upward arrow with horizontal line above it (top barrier style)
+- Send to Back: downward arrow with horizontal line below it (bottom barrier style)
+- Replaced previous stacked-rectangle icons with opacity-based layering metaphor
+- All icons remain as SVG elements rendered inside button wrappers — disabled/hover states unchanged
+- Button layout, spacing, and dividers remain unchanged
+- Click handlers unchanged — each button still triggers the same layer operation
+- Typecheck passes
+- **Learnings for future iterations:**
+  - UnifiedToolbar icon components are simple inline SVGs using currentColor for theming
+  - SVG icons use viewBox="0 0 24 24" with 18x18 rendered size — consistent sizing across all toolbar icons
+---

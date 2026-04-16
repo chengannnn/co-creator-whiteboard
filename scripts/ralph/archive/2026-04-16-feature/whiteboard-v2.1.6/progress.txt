@@ -1,0 +1,35 @@
+# Ralph Progress Log
+Started: Thu Apr 16 2026
+Branch: feature/whiteboard-v2.1.7
+---
+
+## Codebase Patterns
+- core/transform.ts is the canonical place for view/zoom utilities — contains zoomFromCenter, screenToWorld, worldToScreen, applyTransform
+- Zoom operations must update zoom, scrollX, and scrollY together to keep viewport center anchored — use zoomFromCenter from transform.ts
+- CanvasComponent uses ref-based state (scaleRef, panXRef) for immediate zoom updates in wheel handler; App.tsx uses React state (scale, panX, panY) — both must use same formula
+- `useImperativeHandle` is defined before `renderStaticScene`/`renderInteractive` useCallbacks — must use refs to access them from exposed methods
+- renderInteractive uses `scaleRef.current` and `panXRef.current` for transform values to avoid stale closures in event handlers
+- Closed shapes (rectangle, ellipse, rhombus) share `createBBoxHandler` factory in RectangleHandler.ts — all use `Math.min`/`Math.abs` for coordinate normalization
+- Vector shapes (line, arrow) preserve direction via `points` array with signed deltas; `width`/`height` store absolute values separately
+- Freehand normalizes by recomputing bbox from points and shifting all points relative to min values
+- Element creation uses `createBaseElement` helper in helpers.ts which initializes `groupIds: []`
+- Three-layer canvas: bg (background), static (committed shapes), interactive (draft/in-progress shapes)
+- Resize uses absolute coordinate calculation: `applyResize` receives `mouseX`/`mouseY` and recalculates dimensions from anchor corner (CanvasComponent.tsx + SelectToolHandler.ts)
+- hitTesting.ts exports `getWorldBounds`, `pointInBoundingBox`, `findElementsAtPoint`, `rectsIntersect`, and `findElementsInRect` for bounding box operations
+- Marquee selection uses explicit `renderInteractive()` call from pointer handlers — ref-based state avoids unnecessary React re-renders
+- Group selection: clicking any element with `groupIds` expands selection to all elements sharing that groupId via `scene.getGroupElementIds()`
+- Group rendering uses union bounding box with single dashed border; resize handles disabled for group selections (CRITICAL: groups move-only in v2.1.3)
+- Render callbacks (`renderStaticScene`, `renderInteractive`) must be accessed via refs in `useImperativeHandle` since they're defined after it
+- Layer ordering is controlled by the `index` property on SceneElement; getElements() sorts by `a.index - b.index`
+- scene.replaceAll() is used after index mutation to update the internal map with modified elements
+- History.push() must be called BEFORE the mutation to capture the pre-change state for undo
+- All layer operations are no-ops when selectedIds.length !== 1
+- UnifiedToolbar icon components are inline SVGs using currentColor for theming, 18x18 rendered size
+- Layer icons are inline SVGs defined directly in UnifiedToolbar.tsx (lines 35-66), not separate files
+- Icon height consistency is determined by SVG element's y-coordinates within the 0 0 24 24 viewBox
+- handleRoundCornerToggle in App.tsx is reused for both Sharp and Round corner toggles since they share the same underlying logic
+- CanvasComponent.tsx round corner rendering uses `borderRadius: isRoundCapable && isRoundCornerEnabled ? 12 : 0`
+- Group/Ungroup enablement logic lives entirely in UnifiedToolbar.tsx, not in CanvasComponent
+- CanvasComponent's ungroupSelectedElements accepts an explicit groupId rather than computing it, keeping the toolbar in control of the state machine
+- Typecheck command: `npm run typecheck` (runs tsc on both backend and frontend)
+---

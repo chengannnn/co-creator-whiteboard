@@ -1,0 +1,99 @@
+{
+  "project": "Whiteboard v2.1.4",
+  "branchName": "feature/whiteboard-v2.1.4",
+  "description": "修复反向拖拽绘制和橡皮擦光标跟随的致命 Bug，重构以视口中心为基准的缩放引擎，引入全新的对象层级（Z-Index）图层管理系统。",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix reverse-direction drawing with immutable origin coordinates",
+      "description": "As a user, I want to draw shapes by dragging in any direction (including left and up), so that the shape always appears correctly and never disappears regardless of drag direction.",
+      "acceptanceCriteria": [
+        "originX and originY are captured exactly once in pointerdown and are NEVER updated during pointermove or pointerup",
+        "During pointermove, closed shape draft element bounding box uses: x = Math.min(originX, currentX), y = Math.min(originY, currentY), width = Math.abs(currentX - originX), height = Math.abs(currentY - originY)",
+        "Rectangle tool: dragging from (500,500) to (200,200) leaves a visible 300x300 rectangle at (200,200)",
+        "Rhombus tool: same coordinate normalization, shape renders correctly in all 4 drag directions",
+        "CRITICAL: Do NOT apply this absolute Math.min/Math.abs normalization to directional vector tools (Line, Arrow, Freehand). They must preserve their original mathematical start/end point directionality.",
+        "SceneElement width and height for closed shapes are NEVER negative",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Fix eraser cursor not following mouse during drag",
+      "description": "As a user, I want the eraser cursor icon to follow my mouse movement while dragging, so I always know where the eraser is positioned.",
+      "acceptanceCriteria": [
+        "When activeTool === 'eraser', canvas container applies cursor: url(eraser-icon), auto !important at all times including :active state",
+        "pointerdown on canvas calls e.preventDefault() to suppress native text selection and drag-and-drop without breaking touch",
+        "Eraser icon follows the mouse pixel-accurately during continuous drag at any speed",
+        "Cursor does not freeze, flicker, or disappear at any point during the drag",
+        "Releasing the mouse does not leave the eraser cursor stuck; it persists while eraser tool is active",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Implement viewport-center-based zoom algorithm",
+      "description": "As a user, I want zoom in/out to keep the center of my viewport anchored to the same world coordinates, so that my view does not fly away when I click the plus or minus buttons.",
+      "acceptanceCriteria": [
+        "Zoom controller computes viewport center: viewportCenterX = viewportWidth / 2, viewportCenterY = viewportHeight / 2",
+        "Converts viewport center to world coordinates: worldX = (viewportCenterX - scrollX) / zoom, worldY = (viewportCenterY - scrollY) / zoom",
+        "After updating zoom, recalculates scroll to compensate: newScrollX = viewportCenterX - (worldX * newZoom), newScrollY = viewportCenterY - (worldY * newZoom)",
+        "newZoom, newScrollX, newScrollY are applied atomically to AppState",
+        "Drawing a square at viewport center, then repeatedly clicking + to zoom in, the square remains visually centered at every zoom step",
+        "Repeatedly clicking - to zoom out, the square also remains centered",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Implement layer management core array logic with Undo/Redo",
+      "description": "As a developer, I need the layer ordering logic to correctly reorder elements in the Scene.elements array and push a history snapshot after each operation, so that Undo/Redo works correctly after layer changes.",
+      "acceptanceCriteria": [
+        "Bring to Front: selected element is splice-removed and push-appended to the end of the elements array",
+        "Send to Back: selected element is splice-removed and unshift-inserted at index 0",
+        "Bring Forward: selected element at index i is swapped with element at index i+1",
+        "Send Backward: selected element at index i is swapped with element at index i-1",
+        "Each of the 4 operations triggers a full canvas redraw after the array mutation",
+        "Each of the 4 operations pushes a complete state snapshot to the Undo/Redo history stack in the same format as existing history",
+        "Undo after a layer operation correctly restores the previous element ordering",
+        "Redo after undoing a layer operation correctly re-applies the ordering change",
+        "Operations only apply when exactly ONE element is selected; multi-selection is a no-op",
+        "Export 4 pure utility functions: bringToFront, sendToBack, bringForward, sendBackward -- each returns the mutated array",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add Layer management toolbar UI with button state machine",
+      "description": "As a user, I want 4 layer control buttons in the toolbar so I can adjust the stacking order of a selected shape with a single click.",
+      "acceptanceCriteria": [
+        "New Layer button group added to toolbar second row between Style and Save sections, visually separated by | dividers",
+        "Region labeled with title text Layer",
+        "4 icon buttons: Bring Forward, Send Backward, Bring to Front, Send to Back",
+        "All 4 buttons disabled when selectedElementIds is empty, when multiple elements are selected, OR when a Group is selected (strictly single un-grouped element allowed)",
+        "Send Backward and Send to Back are disabled when the selected element is the FIRST visible (isDeleted: false) element in the array",
+        "Bring Forward and Bring to Front are disabled when the selected element is the LAST visible (isDeleted: false) element in the array",
+        "Clicking an enabled button calls the corresponding US-004 utility function and triggers redraw and history pipeline",
+        "Disabled buttons have reduced opacity; enabled buttons show hover and active states",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

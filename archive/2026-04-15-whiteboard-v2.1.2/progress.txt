@@ -1,0 +1,92 @@
+# Ralph Progress Log
+Started: Tue Apr 15 2026
+---
+
+## Codebase Patterns
+- All shape rendering now uses native Canvas 2D APIs via `drawShape(ctx, element, themeMode)` in CanvasComponent.tsx
+- Element creation uses `createBaseElement()` in helpers.ts for common fields
+- Three-layer canvas: background (bg), committed shapes (static), draft/selection (interactive)
+- SceneElement type hierarchy: BaseElement → specific element types (RectangleElement, etc.) → SceneElement union
+
+## [2026-04-15 10:41] - US-001
+- Removed roughjs dependency and all roughness/seed properties
+- **Files changed:**
+  - `packages/frontend/package.json` — removed roughjs from dependencies
+  - `packages/frontend/src/types/element.ts` — removed roughness and seed from BaseElement
+  - `packages/frontend/src/components/CanvasComponent.tsx` — removed RoughCanvas import/usage, rewrote drawShape to use native Canvas 2D
+  - `packages/frontend/src/core/tools/helpers.ts` — removed roughness/seed from createBaseElement
+  - `packages/frontend/src/App.tsx` — removed roughness/seed from image creation and shapeToElement
+  - Test files (Scene.test.ts, history.test.ts, inline-history.test.ts) — removed roughness/seed
+- **Learnings for future iterations:**
+  - drawShape now takes `CanvasRenderingContext2D` instead of `RoughCanvas` — all new rendering code should use native ctx methods
+  - Text and image cases in drawShape call `ctx.restore()` early since they need the original transform for positioning
+  - The hatch fill style is no longer supported (was a roughjs feature) — if needed, implement with native canvas patterns
+---
+
+## [2026-04-15 10:45] - US-002
+- Verified drawShape function uses native Canvas 2D APIs for all shape types
+- Marked US-002 as passes: true in PRD
+- **Files changed:**
+  - `prd.json` — updated US-002 passes flag
+- **Verification:**
+  - Rectangles: ctx.fillRect/ctx.strokeRect with borderRadius support
+  - Rhombuses: ctx.beginPath/moveTo/lineTo/closePath
+  - Lines/Freehand: ctx.beginPath/moveTo/lineTo
+  - Arrows: standard paths + filled triangle arrowheads (start + end)
+  - Style properties: strokeColor, fillColor, strokeWidth, strokeStyle, opacity all apply correctly
+  - renderStaticScene and exportPng both use drawShape with CanvasRenderingContext2D
+- Typecheck passes, 57 tests pass
+---
+
+## [2026-04-15 10:50] - US-003
+- Verified Interactive Canvas ghosting fix is already in place
+- **Verification:**
+  - onPointerMove: clears interactive canvas with clearRect before each draft redraw (lines 1224-1229)
+  - setDraft: calls renderInteractive() which starts with clearRect (line 631)
+  - onPointerUp: clears interactive canvas after commit (lines 1417-1423), sets draftRef.current = null
+  - Only Interactive Canvas is cleared, Static Canvas remains unaffected
+- Marked US-003 as passes: true in PRD
+- **Files changed:** `prd.json`
+- Typecheck passes
+---
+
+## [2026-04-15 10:55] - US-004
+- Verified left/up/diagonal drag drawing is already correctly implemented
+- **Verification:**
+  - RectangleHandler.onPointerMove: uses Math.min(el.x, worldX) for x/y and Math.abs() for width/height
+  - LineHandler.onPointerMove: uses relative dx/dy points, works in all directions
+  - FreehandHandler.onPointerMove: recomputes bounding box from all points using Math.min/Math.max
+  - Committed shapes use correct position and dimensions on Static Canvas
+- Marked US-004 as passes: true in PRD
+- **Files changed:** `prd.json`
+- Typecheck passes
+---
+
+## [2026-04-15 11:00] - US-002 (supplemental)
+- Implemented all four arrowhead types in drawShape: 'arrow', 'bar', 'dot', 'inverted_triangle'
+- Extracted drawArrowhead helper function for reusable arrowhead rendering
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — added Arrowhead import, refactored arrow case with switch for all types
+- Typecheck passes, 57 tests pass, lint 0 errors
+---
+
+## [2026-04-15 11:00] - US-005
+- Fixed unstable resize behavior on selected shapes
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — changed minimum resize constraint from 10px to 1px
+- **Verification:**
+  - Resize handles: 8 handles (nw, ne, sw, se, n, s, e, w) positioned via getBBox + getHandlePositions
+  - Corner handles: correctly update x, y, width, height based on mouse delta
+  - Edge handles: correctly adjust single dimension
+  - Shape width and height now constrained to minimum 1 pixel (was 10px, preventing small resizes)
+  - Released mouse commits resized shape via onMoveElements + pointerUp handler
+- Typecheck passes, 57 tests pass
+---
+
+## [2026-04-15 11:05] - US-005 (supplemental)
+- Fixed missing real-time visual feedback during resize/move interactions
+- **Root cause:** During resize/move pointerMove, `onMoveElements()` updated the scene but neither `renderStaticScene()` nor `renderInteractive()` were called, so the canvas wasn't redrawn until pointerUp
+- **Files changed:**
+  - `packages/frontend/src/components/CanvasComponent.tsx` — added `renderStaticScene()` and `renderInteractive()` calls in both resizing and moving pointerMove handlers
+- Typecheck passes, 57 tests pass
+---

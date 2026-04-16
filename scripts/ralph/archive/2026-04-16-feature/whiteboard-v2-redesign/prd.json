@@ -1,0 +1,83 @@
+{
+  "project": "Whiteboard v2.1.6",
+  "branchName": "feature/whiteboard-v2.1.6",
+  "description": "Fix wheel zoom step to fixed 0.1, unify +/- button step, align layer icon heights, add Sharp Corner button with mutual-exclusion, and add standalone Ungroup button.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix wheel zoom step to fixed 0.1 per tick and unify +/- button step",
+      "description": "As a user, I want the mouse wheel and +/- buttons to zoom smoothly at a predictable 10% rate, so that I can zoom without the view jumping uncontrollably.",
+      "acceptanceCriteria": [
+        "CanvasComponent.tsx wheel handler: use direction = Math.sign(e.deltaY) and step = direction * 0.1, ignoring deltaY magnitude",
+        "newZoom = direction > 0 ? currentScale - 0.1 : currentScale + 0.1, clamped to [MIN_ZOOM, MAX_ZOOM]",
+        "ZOOM_FACTOR constant (0.08) is removed or unused by wheel handler",
+        "Wheel handler still calls zoomFromCenter(newZoom, ...) for viewport-center anchoring",
+        "Define ZOOM_STEP = 0.1 as a named constant",
+        "BottomPanel +/- buttons updated from 0.25 to 0.1 step in onClick handlers",
+        "One wheel tick changes zoom by exactly 10% (e.g. 100% to 110% or 100% to 90%)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Align layer management icon heights",
+      "description": "As a user, I want all 4 layer management icons to have consistent visual height, so the toolbar looks polished.",
+      "acceptanceCriteria": [
+        "BringForwardIcon arrow shaft extended so SVG bounding box height matches BringToFrontIcon (span y=5 to y=19)",
+        "SendBackwardIcon arrow shaft extended so SVG bounding box height matches SendToBackIcon (span y=5 to y=19)",
+        "Arrow head/tip positions remain visually proportional",
+        "All 4 icons share viewBox 0 0 24 24 (unchanged)",
+        "Hover and disabled states still work correctly (no CSS logic changes)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add Sharp Corner button with mutual-exclusion state",
+      "description": "As a user, I want a Sharp Corner button next to Round Corner, so I can easily revert rounded shapes back to sharp corners.",
+      "acceptanceCriteria": [
+        "Sharp Corner button added immediately to the left of the Round Corner button in Row 1 of UnifiedToolbar",
+        "Sharp Corner icon is an SVG showing a sharp-cornered rectangle (not rounded)",
+        "Sharp Corner button has same enabled/disabled condition as Round Corner (only enabled for rectangle/rectangle-solid/rhombus/rhombus-solid tools)",
+        "Mutual exclusion: clicking Sharp Corner sets isRoundCornerEnabled to false; clicking Round Corner sets it to true",
+        "At most one of Sharp/Round can be visually active (highlighted border/background) at a time",
+        "Clicking Sharp Corner with eligible selected elements EXPLICITLY sets their borderRadius to 0 (even if currently undefined), pushes history snapshot, and calls onSceneMutate('update')",
+        "Clicking Sharp Corner with no eligible selected elements only changes the global preset (new shapes get borderRadius = 0)",
+        "Pass isSharpCornerEnabled prop (derived from !isRoundCornerEnabled when active tool is eligible) to UnifiedToolbar",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add standalone Ungroup button with correct state machine",
+      "description": "As a user, I want dedicated Group and Ungroup buttons to manage element groups, so I can group and ungroup elements with clear, explicit controls.",
+      "acceptanceCriteria": [
+        "Single Group/Ungroup toggle button replaced with two separate buttons: Group and Ungroup in Row 1 of UnifiedToolbar",
+        "Group icon replaced with SVG of four squares converging toward center",
+        "New Ungroup icon SVG of four squares spreading outward from center",
+        "Group button enabled when selectedElements.length >= 2 AND NOT areElementsInSameGroup(selectedElements)",
+        "CRITICAL FIX: Ungroup button enabled when ALL selected elements share a common top-level groupId AND no other non-selected elements have that same top-level groupId. (Do NOT require length >= 2, to allow ungrouping orphaned 1-element groups).",
+        "Clicking Ungroup identifies the shared top-level groupId, removes ONLY that specific groupId from each selected element's groupIds array via filter (preserving nested groups if any), pushes history, calls onSceneMutate('update'), and re-renders",
+        "Z-Index preserved: element order in Scene.elements array is NOT changed during ungroup",
+        "Both buttons have correct hover and disabled visual states (opacity 0.4 for disabled)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

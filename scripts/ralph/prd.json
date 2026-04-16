@@ -1,0 +1,62 @@
+{
+  "project": "Whiteboard v2.1.8",
+  "branchName": "feature/whiteboard-v2.1.8",
+  "description": "Toolbar layout refactor and icon visual balancing. Reorder Row 1 buttons into logical groups with dividers, and replace Unicode icons with SVG components with precise Circle/Rhombus visual size matching.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Replace Unicode tool icons with SVG components",
+      "description": "As a developer, I want all tool icons to use SVG instead of Unicode characters so that rendering is consistent across Windows, Mac, and Linux.",
+      "acceptanceCriteria": [
+        "Create SVG icon components for Rectangle, Rectangle-Solid, Line, Arrow in UnifiedToolbar.tsx following existing pattern (18x18 display, 0 0 24 24 viewBox, currentColor stroke, fill none)",
+        "Eraser icon remains unchanged (already an SVG component)",
+        "TOOLS array icon field references SVG component functions for Rectangle, Rectangle-Solid, Line, Arrow",
+        "Icon rendering in button simplified to always use <tool.icon /> since all icons are now functions",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add SVG Ellipse and Rhombus icon components with visual size balancing",
+      "description": "As a user, I want the Circle and Rhombus icons to appear the same visual size so the toolbar feels balanced.",
+      "acceptanceCriteria": [
+        "Create Ellipse SVG icon component with <circle> using r=9 (viewBox 0 0 24 24) for outline circle",
+        "Create Ellipse-Solid SVG icon component with <circle r=9> and fill=currentColor for solid circle",
+        "Create Rhombus SVG icon component with diamond path for outline rhombus",
+        "Create Rhombus-Solid SVG icon component with diamond path and fill=currentColor for solid rhombus",
+        "Circle and Rhombus icons appear visually equal in size within the toolbar buttons",
+        "Update TOOLS array to reference the new SVG components for ellipse, ellipse-solid, rhombus, rhombus-solid",
+        "currentColor inheritance ensures active/disabled state coloring still works correctly",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Reorder toolbar buttons and insert dividers in Row 1",
+      "description": "As a user, I want the toolbar buttons grouped logically (Tools | Corners | Group/Ungroup | Image) with visual dividers so I can find tools faster.",
+      "acceptanceCriteria": [
+        "Eraser remains in TOOLS array as last item (no data structure change)",
+        "A divider (1px wide, 24px tall, theme.divider color) is rendered immediately after TOOLS.map() block (between Eraser and SharpCorner)",
+        "SharpCorner and RoundCorner buttons are adjacent with no divider between them",
+        "A divider is rendered between RoundCorner and Group buttons",
+        "Group and Ungroup buttons are adjacent with no divider between them",
+        "A divider is rendered between Ungroup and Insert Image button",
+        "Insert Image is now the rightmost button in Row 1",
+        "All dividers use theme.divider for color (light: #f0e4c0, dark: #444444) ensuring dark mode compatibility",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

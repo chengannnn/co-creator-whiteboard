@@ -1,0 +1,183 @@
+{
+  "project": "Whiteboard V2 Redesign",
+  "branchName": "feature/whiteboard-v2-redesign",
+  "description": "对协作白板应用进行全面 UI 重绘和功能增强。修复菱形按键、消除画布抖动、新增箭头和图片插入功能，优化橡皮擦为真实擦除，合并为双行统一功能栏。",
+  "userStories": [
+    {
+      "id": "v2-redesign-1",
+      "title": "Fix canvas jitter during drawing and input",
+      "description": "As a user, I want the canvas to stay stable while drawing or typing, so that the experience is smooth.",
+      "acceptanceCriteria": [
+        "Preview drawing separated from formal redrawCanvas — no shapes state mutation during mouseMove",
+        "Shapes state only committed on mouseUp",
+        "Text input overlay does not trigger canvas redraw",
+        "Verify in browser: no jitter when drawing rectangles, ellipses, freehand",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-2",
+      "title": "Fix canvas jitter during panning",
+      "description": "As a user, I want panning the canvas to be smooth without content jittering.",
+      "acceptanceCriteria": [
+        "panX/panY changes only update canvas transform, do not trigger shape re-render",
+        "Verify in browser: no jitter when dragging/panning canvas",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-3",
+      "title": "Add Rhombus shape tool",
+      "description": "As a user, I want to draw a rhombus/diamond shape so that I can add diamond shapes to the whiteboard.",
+      "acceptanceCriteria": [
+        "Add RhombusShape type in types/shapes.ts (center x/y, width, height)",
+        "Add RhombusShape to Shape union type",
+        "Add rhombus button in toolbar (icon: ◇, shortcut: D)",
+        "drawShape implements rhombus via rc.polygon connecting 4 vertices (top, right, bottom, left)",
+        "Rhombus supports select, move, resize, property editing",
+        "Rhombus supports both solid and outline fill modes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-4",
+      "title": "Add Arrow shape tool",
+      "description": "As a user, I want to draw arrows with arrowheads so that I can indicate direction in my diagrams.",
+      "acceptanceCriteria": [
+        "Add ArrowShape type in types/shapes.ts (startX, startY, endX, endY, style)",
+        "Add ArrowShape to Shape union type",
+        "Add arrow button in toolbar (icon: →, shortcut: A)",
+        "drawShape renders arrow: roughjs linearPath + arrowhead triangle at end",
+        "Arrowhead size proportional to strokeWidth (strokeWidth * 3)",
+        "Arrow supports solid/dashed line styles",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-5",
+      "title": "Add Image insert feature",
+      "description": "As a user, I want to insert images onto the whiteboard so that I can include pictures in my diagrams.",
+      "acceptanceCriteria": [
+        "Add ImageShape type in types/shapes.ts (x, y, width, height, src: string)",
+        "Add ImageShape to Shape union type",
+        "Add image button in toolbar (icon: image icon, shortcut: I)",
+        "Clicking image button opens file picker dialog",
+        "Selected image converted to Data URL and added as shape",
+        "Image default width: 200px, maintains aspect ratio",
+        "Image supports select, move, resize",
+        "drawShape renders image via ctx.drawImage",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-6",
+      "title": "Separate solid and outline shape buttons",
+      "description": "As a user, I want separate buttons for solid and outline shapes so I don't need to draw then fill separately.",
+      "acceptanceCriteria": [
+        "Rectangle outline (icon: ▭) and solid (icon: ▮) as separate buttons",
+        "Ellipse outline (icon: ○) and solid (icon: ●) as separate buttons",
+        "Rhombus outline (icon: ◇) and solid (icon: ◆) as separate buttons",
+        "Solid button sets fillStyle: 'solid' with current unified color",
+        "Outline button sets fillStyle: 'none'",
+        "Remove Fill Style selector (none/solid/hatch) from PropertiesPanel",
+        "Remove Fill Color selector from PropertiesPanel",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-7",
+      "title": "Unified color picker bar",
+      "description": "As a user, I want a single color picker that controls both stroke and fill colors so I don't have to manage two separate color sets.",
+      "acceptanceCriteria": [
+        "Single row of color buttons in the toolbar bottom row",
+        "10 color options: black #000000, red #e03131, blue #1c7ed6, green #2f9e44, purple #6741d9, orange #e8590c, brown #a0522d, gray #868e96, pink #e84393, cyan #00cec9",
+        "Selected color applies to both strokeColor and fillColor for new shapes",
+        "Selected color updates both strokeColor and fillColor for selected shapes",
+        "Custom color picker (+ button) preserved",
+        "Remove Stroke Color and Fill Color sections from PropertiesPanel",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-8",
+      "title": "Pixel-based eraser",
+      "description": "As a user, I want the eraser to erase only the pixels within the eraser stroke path, so it behaves like a real eraser.",
+      "acceptanceCriteria": [
+        "Eraser no longer deletes entire shapes on click",
+        "Uses globalCompositeOperation = 'destination-out' to erase pixels on canvas",
+        "Eraser has adjustable radius (default 20px, adjustable via toolbar width control)",
+        "Eraser path smooth (continuous circular/linear erase)",
+        "Erase effect visible in real time",
+        "freehand strokes: erased pixels disappear visually (pixel-level)",
+        "Note: pixel erase does not modify shapes data in MVP scope",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-9",
+      "title": "Unified two-row toolbar",
+      "description": "As a user, I want all tools and color options in one unified floating toolbar so I have a cleaner interface.",
+      "acceptanceCriteria": [
+        "Delete existing Toolbar.tsx and PropertiesPanel.tsx components",
+        "Create new UnifiedToolbar component with two rows",
+        "Row 1 (tools): drag handle, lock button, select, rectangle (outline/solid), ellipse (outline/solid), rhombus (outline/solid), line, arrow, freehand, eraser, image, clear canvas",
+        "Row 2 (options): color buttons — divider — width selector — divider — line style (solid/dashed)",
+        "Toolbar style: rounded corners, semi-transparent yellow background, shadow, dividers",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "v2-redesign-10",
+      "title": "Draggable and lockable toolbar",
+      "description": "As a user, I want to move the toolbar and lock the canvas so I can organize my workspace.",
+      "acceptanceCriteria": [
+        "Remove minimize/collapse toggle button from toolbar",
+        "First button on left is drag handle (icon: grip), click and drag to reposition toolbar",
+        "Drag handle visible on hover or during drag",
+        "Second button on left is lock toggle (icon: 🔓/🔒)",
+        "Locked state: no drawing, no erasing, no shape select/move on canvas (pan and zoom still work)",
+        "Lock state managed in App.tsx, passed to CanvasComponent",
+        "Locked canvas cursor shows 'not-allowed' or 'default'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
