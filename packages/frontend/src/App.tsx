@@ -123,7 +123,8 @@ function WhiteboardRoom() {
 
     const connect = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = protocol + '//' + (window.location.host || 'localhost:3001') + '/ws';
+      // 优先使用环境变量 VITE_WS_URL，如果没有才回退到 localhost
+      const wsUrl = import.meta.env.VITE_WS_URL || (protocol + '//' + (window.location.host || 'localhost:3001') + '/ws');
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
