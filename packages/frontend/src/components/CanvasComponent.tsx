@@ -128,6 +128,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     y: number;
     content: string;
     fontSize: number;
+    isNew?: boolean;
   } | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -424,9 +425,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     },
     bringToFront: () => {
       if (selectedIds.length !== 1) return;
+      history.push();
       const elements = scene.getElements();
       bringToFront(elements, selectedIds[0]);
-      history.push();
       scene.replaceAll(elements);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
@@ -434,9 +435,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     },
     sendToBack: () => {
       if (selectedIds.length !== 1) return;
+      history.push();
       const elements = scene.getElements();
       sendToBack(elements, selectedIds[0]);
-      history.push();
       scene.replaceAll(elements);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
@@ -444,9 +445,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     },
     bringForward: () => {
       if (selectedIds.length !== 1) return;
+      history.push();
       const elements = scene.getElements();
       bringForward(elements, selectedIds[0]);
-      history.push();
       scene.replaceAll(elements);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
@@ -454,9 +455,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
     },
     sendBackward: () => {
       if (selectedIds.length !== 1) return;
+      history.push();
       const elements = scene.getElements();
       sendBackward(elements, selectedIds[0]);
-      history.push();
       scene.replaceAll(elements);
       onSceneMutate('update');
       renderStaticSceneRef.current?.();
@@ -769,8 +770,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       drawShape(ctx, el, themeMode);
     }
 
+    // 防御：绝不为空白文本绘制协作边框
     // Draw colored borders on remote elements (attribution)
     for (const el of elements) {
+      if (el.type === 'text' && !(el as any).content) continue;
       const ownerId = shapeOwners.get(el.id);
       if (ownerId && ownerId !== userId && ownerId !== '__remote__') {
         const bounds = getElementBounds(el);
@@ -971,8 +974,8 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
    * Commit a SceneElement to the scene. Adds to scene, pushes history, triggers redraw.
    */
   const commitElement = useCallback((el: SceneElement) => {
-    scene.addElement(el);
     history.push();
+    scene.addElement(el);
     onSceneMutate('add');
     onSelectedIdsChange([el.id]);
     renderStaticScene();
@@ -1451,7 +1454,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
 
   const finishEditing = () => {
     if (!editingText) return;
-    const { shapeId, content } = editingText;
+    const { shapeId, content, isNew } = editingText;
     if (content.trim()) {
       const ctx = interactiveCanvasRef.current?.getContext('2d');
       let width = 100;
@@ -1462,13 +1465,17 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         width = Math.ceil(metrics.width);
         height = editingText.fontSize;
       }
-      history.push();
+      if (!isNew) {
+        history.push();
+      }
       scene.updateElement(shapeId, { content: content.trim(), width, height });
       onSceneMutate('update');
       renderStaticScene();
     } else {
       // Remove empty text shapes
-      history.push();
+      if (!isNew) {
+        history.push();
+      }
       scene.deleteElement(shapeId);
       onSceneMutate('delete');
       renderStaticScene();
@@ -1479,7 +1486,9 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
   const cancelEditing = () => {
     if (!editingText) return;
     if (!editingText.content.trim()) {
-      history.push();
+      if (!editingText.isNew) {
+        history.push();
+      }
       scene.deleteElement(editingText.shapeId);
       onSceneMutate('delete');
       renderStaticScene();
@@ -1854,6 +1863,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
       if (activeTool === 'eraser' && eraserHandlerRef.current) {
         const hitIds = eraserHandlerRef.current.finish();
         if (hitIds.size > 0) {
+          history.push();
           for (const id of hitIds) {
             const el = scene.getElement(id);
             if (el && !el.isDeleted) {
@@ -1968,7 +1978,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         versionNonce: Math.floor(Math.random() * 1e9),
         isDeleted: false,
         groupIds: [],
-        index: 0,
+        index: Date.now(),
         updated: Date.now(),
         ownerId: userId ?? '',
         content: '',
@@ -1978,10 +1988,10 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         verticalAlign: 'top',
         lineHeight: 1.25,
       };
-      scene.addElement(newEl);
       history.push();
+      scene.addElement(newEl);
       onSceneMutate('add');
-      setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20 });
+      setEditingText({ shapeId: id, x: point.x, y: point.y, content: '', fontSize: 20, isNew: true });
     } else if (hitEl.type === 'text') {
       const textEl = hitEl as Extract<SceneElement, { type: 'text' }>;
       setEditingText({
@@ -1990,6 +2000,7 @@ export default forwardRef<CanvasComponentRef, CanvasComponentProps>(function Can
         y: textEl.y,
         content: textEl.content,
         fontSize: textEl.fontSize,
+        isNew: false,
       });
     }
   };

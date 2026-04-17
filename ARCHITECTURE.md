@@ -1,7 +1,7 @@
 # Whiteboard Architecture (AI-Friendly)
 
 > **Target audience**: AI coding assistants (Claude, Copilot, etc.) picking up this project.
-> **Last updated**: 2026-04-17 (v2.1.9 — logical delete, undo upsert, redraw fix)
+> **Last updated**: 2026-04-17 (v2.1.9 — logical delete, undo upsert, GC, 300-step history)
 > **Branch**: `feature/whiteboard-v2.1.8`
 
 ---
@@ -125,7 +125,7 @@ SceneElement (union type)
 - `getElements()` → filters `!isDeleted`, sorts by `index` ascending.
 - **Z-order**: determined by `index` field. Array position in `getElements()` result = render order.
 - `deleteElement()` → sets `isDeleted: true`, does **NOT** remove from Map.
-- `replaceAll()` → clears Map, re-inserts all elements.
+- `replaceAll(elements)` → **set-diff algorithm**: (1) For every element currently in the Scene Map that does NOT appear in the incoming `elements` array, mark it as `isDeleted: true` (logical deletion, version bump, timestamp update) — do NOT physically remove it. (2) Insert/overwrite all elements from the incoming array. This preserves deleted elements for Undo/Redo synchronization.
 - `snapshot()` → deep clone via `structuredClone` — includes logically deleted elements (unlike `getElements()`).
 - `groupElements()` / `ungroupElements()` → shared `groupIds` array.
 
@@ -271,12 +271,18 @@ World → Screen:  screenX = worldX * zoom + scrollX
 - **Must** use `zoomFromCenter()` from `transform.ts` to compute compensatory `scrollX/scrollY` so that the viewport center point remains anchored.
 - Direct manipulation of `scale` without corresponding `panX/panY` compensation will cause visual jumps.
 
-### Rule 4: Logical Deletion + Z-Index via Array Order
+### Rule 4: Logical Deletion — Absolutely NO Physical Removal
 
-- Deletion = `isDeleted: true`. **Never** `delete` or `splice` elements from the Scene Map.
-- Z-index = `Scene.elements` sorted by `index` field (ascending).
-- Layer ordering utilities (`bringToFront`, `sendToBack`, etc.) in `layerUtils.ts` mutate `index` and re-sort.
-- Hit testing iterates **in reverse** (`elements.length - 1` down to `0`) to get top-most element first.
+- **Frontend**: `Scene.deleteElement()` sets `isDeleted: true`. **Never** `delete`, `filter()`, or `splice()` elements from the Scene Map. `Scene.getElements()` filters out deleted elements but they remain in the internal Map.
+- **Backend**: `shape_delete` in `packages/backend/src/index.ts` must mark `isDeleted: true` on the matching shape via `findIndex`. **Never** `filter()` or `splice()` shapes from the `roomShapes` Map.
+- **Rationale**: Undo/Redo must be able to restore any previously deleted element. Physical deletion permanently destroys the element's existence.
+
+### Rule 4a: Z-Index via `Date.now()` for New Elements
+
+- Every newly created element MUST use `index: Date.now()` as its Z-order key.
+- This guarantees the new element has the highest `index` among all existing elements, ensuring it renders on top.
+- It also ensures the element is correctly included in WebSocket broadcasts (since `getElements()` sorts by `index` ascending, the new element will be at the array tail).
+- **Do NOT** use `elements.length` or any auto-increment counter — they do not guarantee monotonic ordering when elements are logically deleted.
 
 ### Rule 5: Grouping & Ungrouping Data Integrity
 
@@ -299,18 +305,34 @@ Toolbar attribute modifiers (Corners, Colors, Styles) must support a **Dual-Beha
 - **All** toolbar icons must be pure `<svg>` components with explicit `viewBox` and `<path>` definitions.
 - **Implementation**: v2.1.8 replaced all Unicode tool icons with inline SVG components in `UnifiedToolbar.tsx`. Any new tool button added to the toolbar must follow this pattern.
 
-### Rule 8: Logical Delete — Never Physically Remove Elements
+### Rule 8: Undo/Redo & Upsert — Restore Anything, Anytime
 
-- **Backend**: `shape_delete` in `packages/backend/src/index.ts` must mark `isDeleted: true` on the matching shape. **Never** `filter()` or `splice()` shapes from the `roomShapes` Map. This ensures Undo can restore elements.
-- **Backend upsert**: `shape_update` must add the shape via `push()` if `findIndex` returns `-1`. This is critical for Undo restoring elements that the backend no longer has a record of.
-- **Frontend**: `Scene.deleteElement()` sets `isDeleted: true`. `Scene.getElements()` filters out deleted elements but they remain in the internal Map.
+- **Scene.replaceAll set-diff**: When `replaceAll(elements)` receives a snapshot (e.g. from Undo), any element currently in the Scene Map that is **absent** from the incoming array is marked as `isDeleted: true` (logical deletion, version +1, timestamp update). It is NOT physically removed. This allows a subsequent Redo to restore it.
+- **Backend Upsert on shape_update**: When the backend receives a `shape_update` and `findIndex` returns `-1` (shape not found in `roomShapes`), it MUST `push()` the shape into the array. This is critical — an Undo may restore an element the backend has no record of (e.g. created before a page refresh, or restored after the backend GC already swept it).
+- **Frontend snapshot() vs getElements()**: `snapshot()` returns **all** elements in the Map (including logically deleted ones). `getElements()` returns only non-deleted elements sorted by `index`. Use `snapshot()` for Undo/Redo storage and WebSocket broadcast in `replaceAll` actions; use `getElements()` for canvas rendering and hit testing.
 - **Eraser**: Calls `onSceneMutate('delete')` (not `'update'`) after setting `isDeleted: true` on hit elements, so the correct WebSocket broadcast path fires.
 
-### Rule 9: Snapshot for ReplaceAll Sync
+### Rule 9: History Push Iron Law — Push BEFORE Mutate
 
-- In `onSceneMutate` with `action === 'replaceAll'` (Undo/Redo), use `scene.snapshot()` — which returns **all** elements including logically deleted ones — as the broadcast data source, not `scene.getElements()`. This ensures that undoing an erasure or re-deleting restored shapes syncs correctly across devices.
-- `shapeToElement` preserves `isDeleted` via `shape.isDeleted ?? false` in the `commonBase` object.
-- `shape_update` receiver on the frontend calls `canvasRef.current?.redraw()` to force canvas refresh, since `scene.updateElement` mutates in-place without triggering React re-render.
+- **Order of operations**: `history.push()` MUST be called **BEFORE** the scene mutation (`addElement`, `updateElement`, `deleteElement`). This ensures the snapshot captures the "before" state.
+- **onSceneMutate NEVER pushes**: The `onSceneMutate()` callback in `App.tsx` is exclusively for WebSocket broadcasting and shape ownership updates. It must **NEVER** call `history.push()`. Doing so creates a double-push, corrupting the undo stack.
+- **New-element atomicity**: For newly created text elements, the `isNew` flag gates the `history.push()` call in `finishEditing`/`cancelEditing`. This makes the entire creation + typing flow a single atomic undo step — the user presses Ctrl+Z once and the text disappears entirely, rather than having to undo twice.
+- **MAX_HISTORY = 300**: The undo stack caps at 300 steps. When exceeded, the oldest snapshot is `shift()`ed out. Each `push()` also triggers `scene.garbageCollect(history)` to sweep dead nodes.
+- **Snapshot for ReplaceAll Sync**: In `onSceneMutate` with `action === 'replaceAll'` (Undo/Redo), use `scene.snapshot()` — which returns **all** elements including logically deleted ones — as the broadcast data source, not `scene.getElements()`. This ensures that undoing an erasure or re-deleting restored shapes syncs correctly across devices. `shapeToElement` preserves `isDeleted` via `shape.isDeleted ?? false` in the `commonBase` object.
+- **shape_update receiver on the frontend** calls `canvasRef.current?.redraw()` to force canvas refresh, since `scene.updateElement` mutates in-place without triggering React re-render.
+
+### Rule 10: Frontend Garbage Collection — 300-Step History-Driven
+
+- **Trigger**: Called by `HistoryManager.push()` immediately after saving a snapshot to the undo stack.
+- **Mechanism**: `Scene.garbageCollect(historySnapshots)` iterates all elements in the Scene Map. An element is physically deleted (`Map.delete(id)`) **only if**: (1) it is already logically deleted (`isDeleted: true`), AND (2) it does NOT appear as a non-deleted element in ANY snapshot across the entire undo history stack.
+- **Result**: Elements that can still be restored via Undo are preserved. "Dead" elements — deleted long ago and beyond the undo horizon — are permanently removed from memory. This prevents unbounded memory growth.
+- **Never call GC on remote mutations**: Remote `shape_create/update/delete` messages received via WebSocket only mutate the Scene Map; they do NOT trigger GC.
+
+### Rule 11: Backend Garbage Collection — 10-Minute Sweep + New-User Filtering
+
+- **Periodic GC**: A `setInterval` runs every **10 minutes**, iterating all rooms. For each room, it replaces `roomShapes[roomId]` with only the alive shapes (`!isDeleted`). Dead shapes that have survived the full 10-minute window are permanently purged. This is a safety net — the 5-minute room cleanup and logical deletion already prevent most memory leaks.
+- **New-user filtering**: When a new user joins a room, `sendFullState()` filters out logically deleted shapes (`allShapes.filter(s => !s.isDeleted)`) before sending `sync_state`. This prevents new users from inheriting dead data that the backend hasn't swept yet.
+- **Room-level cleanup**: When a room becomes empty (0 clients), `scheduleRoomCleanup(roomId)` starts a **5-minute countdown**. Only after the timer fires are both `rooms` and `roomShapes` entries purged. This allows reconnection within 5 minutes and canvas recovery.
 
 ---
 
@@ -344,7 +366,7 @@ Remote mutation (WebSocket)
 ## Backend Room Lifecycle
 
 1. Client connects via WebSocket → assigned random color + animal name.
-2. Client sends `join_room` → server adds to room Set, sends `sync_state` (all shapes).
+2. Client sends `join_room` → server adds to room Set, sends `sync_state` (alive shapes only — filtered by `!isDeleted`).
 3. Room shape state is stored server-side in `roomShapes` Map (`roomId → Shape[]`).
 4. **Grace period cleanup**: When a room becomes empty (0 clients), its shape data is **NOT** immediately deleted. Instead, `scheduleRoomCleanup(roomId)` starts a **5-minute countdown timer**. Only after this timer fires are the shapes purged from `roomShapes`. This allows users to reconnect within 5 minutes and recover their canvas state.
 5. **Cursor cleanup on room switch**: When a user switches from room A to room B via `join_room`, the server first calls `broadcastCursorLeave(roomA, ws)` to remove the stale cursor from room A's other participants. This prevents cursor ghosting.
@@ -353,7 +375,9 @@ Remote mutation (WebSocket)
    - `shape_create` → `shapes.push(msg.shape)`.
    - `shape_update` → `findIndex` by ID; if found, replace; if **not found**, `push()` (upsert — supports Undo restoring elements the backend doesn't have).
    - `shape_delete` → `findIndex` by ID; sets `isDeleted: true` on the shape. **Never** `filter()` / physical removal.
-8. Server is stateless between restarts — no database.
+8. **Periodic GC**: A `setInterval` runs every **10 minutes**, sweeping all logically deleted shapes from every room's `roomShapes` array.
+9. **New-user filtering**: `sendFullState()` filters `!isDeleted` shapes before sending `sync_state` to a joining user, preventing dead data inheritance.
+10. Server is stateless between restarts — no database.
 
 ### Cleanup Flow
 
@@ -366,10 +390,24 @@ Room becomes empty (clients.size === 0)
   → cleanup timer fires
   → roomShapes.delete(roomId)    // shapes finally purged
   → rooms already gone
+
+Periodic Backend GC (every 10 minutes):
+  → For each room: roomShapes[roomId] = shapes.filter(s => !s.isDeleted)
+  → Dead shapes permanently removed from server memory
+
+New User Join:
+  → sendFullState() filters: allShapes.filter(s => !s.isDeleted)
+  → Only alive shapes sent to the joining client
+
+Frontend GC (on every history.push()):
+  → Scene.garbageCollect(history) scans all undo snapshots
+  → Elements that are isDeleted AND not recoverable from any snapshot → Map.delete(id)
 ```
 
 ### Key Safety Rules
 
 - **NEVER** call `roomShapes.delete(roomId)` synchronously when a room becomes empty. Always route through `scheduleRoomCleanup`.
 - **ALWAYS** call `broadcastCursorLeave(roomId, ws)` before removing a client from a room (both on disconnect and on room switch).
-- **NEVER** physically delete shapes from `roomShapes` via `filter()` or `splice()`. Use `findIndex` + set `isDeleted: true` for deletion; use upsert (`push` when not found) for `shape_update`.
+- **NEVER** physically delete shapes from `roomShapes` via `filter()` or `splice()`. Use `findIndex` + set `isDeleted: true` for deletion; use upsert (`push` when not found) for `shape_update`. The only exception is the **periodic GC** (`setInterval` every 10 minutes), which is the sole authorized place for `filter()` on `roomShapes`.
+- **NEVER** call `history.push()` inside `onSceneMutate()` — it is for WebSocket broadcast only. Push before mutation, not after.
+- **NEVER** use physical deletion (`delete`, `splice`, `filter`) on the frontend Scene Map outside of `garbageCollect()`.

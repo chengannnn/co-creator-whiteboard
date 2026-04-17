@@ -7,6 +7,7 @@ import cors from 'cors';
 interface Shape {
   id: string;
   type: string;
+  isDeleted?: boolean;
   [key: string]: unknown;
 }
 
@@ -93,8 +94,10 @@ function broadcastCursorLeave(roomId: string, ws: WebSocket) {
 }
 
 function sendFullState(ws: WebSocket, roomId: string) {
-  const shapes = roomShapes.get(roomId) ?? [];
-  ws.send(JSON.stringify({ type: 'sync_state', shapes }));
+  const allShapes = roomShapes.get(roomId) ?? [];
+  // 核心拦截：只下发存活的图形给新用户
+  const aliveShapes = allShapes.filter(s => !s.isDeleted);
+  ws.send(JSON.stringify({ type: 'sync_state', shapes: aliveShapes }));
 }
 
 function scheduleRoomCleanup(roomId: string) {
@@ -280,6 +283,21 @@ wss.on('connection', (ws, req) => {
     }
   });
 });
+
+// Server-side Garbage Collection (Runs every 10 minutes)
+setInterval(() => {
+  let totalCleaned = 0;
+  for (const [roomId, shapes] of roomShapes.entries()) {
+    const aliveShapes = shapes.filter(s => !s.isDeleted);
+    if (aliveShapes.length !== shapes.length) {
+      totalCleaned += (shapes.length - aliveShapes.length);
+      roomShapes.set(roomId, aliveShapes);
+    }
+  }
+  if (totalCleaned > 0) {
+    console.log(`[Backend GC] Swept ${totalCleaned} dead shapes from memory.`);
+  }
+}, 10 * 60 * 1000); // 10 minutes
 
 const PORT = process.env.PORT || 3001;
 

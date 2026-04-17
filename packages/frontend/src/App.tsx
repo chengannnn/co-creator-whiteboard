@@ -166,6 +166,7 @@ function WhiteboardRoom() {
               next.set(msg.shape.id, msg.userId ?? '__unknown__');
               return next;
             });
+            canvasRef.current?.redraw();
           } else if (msg.type === 'shape_update' && msg.shape) {
             const scene = sceneRef.current;
             // msg.shape is already a SceneElement from the sender
@@ -180,6 +181,7 @@ function WhiteboardRoom() {
               next.delete(msg.shapeId);
               return next;
             });
+            canvasRef.current?.redraw();
           } else if (msg.type === 'cursor_position' && msg.userId !== userIdRef.current) {
             setRemoteCursors((prev) => {
               const next = new Map(prev);
@@ -242,7 +244,6 @@ function WhiteboardRoom() {
 
     if (action === 'add') {
       // The most recently added element
-      historyRef.current.push();
       const lastEl = elements[elements.length - 1];
       if (lastEl) {
         sendSceneMutation('shape_create', { shape: lastEl, userId: userIdRef.current ?? '__local__' });
@@ -253,13 +254,11 @@ function WhiteboardRoom() {
         });
       }
     } else if (action === 'update') {
-      historyRef.current.push();
       // Broadcast all updated elements
       for (const el of elements) {
         sendSceneMutation('shape_update', { shape: el });
       }
     } else if (action === 'delete') {
-      historyRef.current.push();
       // Broadcast deleted elements
       const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
       for (const el of deletedElements) {
@@ -278,7 +277,6 @@ function WhiteboardRoom() {
         sendSceneMutation('shape_update', { shape: el });
       }
     } else if (action === 'clear') {
-      historyRef.current.push();
       // Broadcast all deletions
       const deletedElements = scene.snapshot().filter((el) => el.isDeleted);
       for (const el of deletedElements) {
@@ -386,14 +384,14 @@ function WhiteboardRoom() {
                   versionNonce: Math.floor(Math.random() * 1e9),
                   isDeleted: false,
                   groupIds: [],
-                  index: 0,
+                  index: now,
                   updated: now,
                   ownerId: userId ?? '',
                   src: evt.target!.result as string,
                   fileId: null,
                 };
-                sceneRef.current.addElement(newEl);
                 historyRef.current.push();
+                sceneRef.current.addElement(newEl);
                 onSceneMutate('add');
                 setSelectedIds([newEl.id]);
               };
@@ -469,14 +467,14 @@ function WhiteboardRoom() {
         versionNonce: Math.floor(Math.random() * 1e9),
         isDeleted: false,
         groupIds: [],
-        index: 0,
+        index: now,
         updated: now,
         ownerId: userId ?? '',
         src: dataUrl,
         fileId: null,
       };
-      sceneRef.current.addElement(newEl);
       historyRef.current.push();
+      sceneRef.current.addElement(newEl);
       onSceneMutate('add');
       setSelectedIds([newEl.id]);
     };

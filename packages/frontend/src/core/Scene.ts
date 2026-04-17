@@ -60,9 +60,28 @@ export class Scene {
 
   /**
    * Clears the map and inserts all elements from the given array.
+   * Replaces the current state with the provided elements.
+   * Elements missing from the new state are marked as logically deleted,
+   * preserving their existence for Undo/Redo synchronization.
    */
   replaceAll(elements: SceneElement[]): void {
-    this.elements.clear();
+    const newIds = new Set(elements.map((e) => e.id));
+
+    // 1. 对于当前场景中存在，但新快照中不存在的元素，不要物理删除，而是标记为逻辑删除
+    for (const [id, el] of this.elements.entries()) {
+      if (!newIds.has(id)) {
+        if (!el.isDeleted) {
+          this.elements.set(id, {
+            ...el,
+            isDeleted: true,
+            version: el.version + 1,
+            updated: Date.now(),
+          } as SceneElement);
+        }
+      }
+    }
+
+    // 2. 正常覆盖/插入快照中的元素
     for (const element of elements) {
       this.elements.set(element.id, element);
     }
@@ -130,6 +149,28 @@ export class Scene {
       }
     }
     return result;
+  }
+
+  /**
+   * 物理删除那些已经被逻辑删除，且无法通过当前历史栈撤销复活的元素。
+   */
+  garbageCollect(historySnapshots: SceneElement[][]): void {
+    // 收集在任何历史快照中仍然存活（未被删除）的元素 ID
+    const recoverableIds = new Set<string>();
+    for (const snapshot of historySnapshots) {
+      for (const el of snapshot) {
+        if (!el.isDeleted) {
+          recoverableIds.add(el.id);
+        }
+      }
+    }
+
+    // 如果当前场景中的元素已被逻辑删除，且在历史栈中找不到存活的备份，则彻底物理删除它
+    for (const [id, el] of this.elements.entries()) {
+      if (el.isDeleted && !recoverableIds.has(id)) {
+        this.elements.delete(id);
+      }
+    }
   }
 
   /**

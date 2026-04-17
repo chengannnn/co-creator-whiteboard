@@ -1,6 +1,8 @@
 import { Scene } from './Scene';
 import type { SceneElement } from '../types/element';
 
+const MAX_HISTORY = 300;
+
 export class HistoryManager {
   private scene: Scene;
   private history: SceneElement[][] = [];
@@ -18,7 +20,16 @@ export class HistoryManager {
     // Store a COPY of the snapshot so future mutations don't affect it
     const snapshot = this.scene.snapshot();
     this.history.push(snapshot);
+
+    // 限制历史记录最大长度为 300
+    if (this.history.length > MAX_HISTORY) {
+      this.history.shift();
+    }
+
     this.forwardHistory = [];
+
+    // 触发场景垃圾回收，清除彻底死掉的僵尸节点
+    this.scene.garbageCollect(this.history);
   }
 
   /**
